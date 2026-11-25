@@ -1,0 +1,24 @@
+{
+ "scenario": "building_train_1/singapore_8",
+ "policy": "sb_policy_v2:SBPolicy",
+ "total_steps": 8640,
+ "total_reward": -53.4695408796415,
+ "score": 0.006188604268477026,
+ "comfort_sum": 0.0,
+ "cost_sum": 214.17261963932015,
+ "carbon_sum": 53.17508470570465,
+ "comfort_part": -0.0,
+ "cost_part": 0.004957699528687967,
+ "carbon_part": 0.0012309047385579781,
+ "mean_kw": {
+  "fan": 0.7060794595647741,
+  "cool": 10.442797080315485,
+  "pump": 0.0,
+  "gas": 0.03033060872643082
+ },
+ "wall_s": 476.12574338912964,
+ "policy_s": 9.360467433929443,
+ "policy_init_s": 0.003014802932739258,
+ "n_ahu": 4,
+ "n_zone": 39
+}

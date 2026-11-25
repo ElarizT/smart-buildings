@@ -60,6 +60,20 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
     vavs = hvac.vavs
     vav_ids = list(vavs.keys())
 
+    mass_idx = None
+    if trace is not None:
+        try:
+            solver = sim._solver
+            bld = sim.building
+            ncol = bld.temp.shape[1]
+            pos = {int(f_): i_ for i_, f_ in enumerate(solver._solved)}
+            mass_idx = []
+            for v in vav_ids:
+                coords = bld.room_dict[v.replace("VAV_", "room_")]
+                mass_idx.append(np.array([pos[r_ * ncol + c_] for r_, c_ in coords]))
+        except Exception as e:  # pragma: no cover
+            print("mass idx failed", e, file=sys.stderr)
+            mass_idx = None
     tot = dict(reward=0.0, comfort=0.0, cost=0.0, carbon=0.0)
     e_tot = dict(fan=0.0, cool=0.0, pump=0.0, gas=0.0)
     rows = []
@@ -106,9 +120,12 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
                 rh=np.array([vavs[v].reheat_valve_setting for v in vav_ids]),
                 ts=str(env.building.current_timestamp),
             ))
+            if mass_idx is not None:
+                mt = sim._solver._mass_temp
+                rows[-1]["zmass"] = np.array([mt[ix].mean() for ix in mass_idx])
             dbg = getattr(policy, "dbg", None)
             if dbg:
-                for k in ("ahu_on", "ahu_p", "ahu_r", "ahu_set", "q", "cs", "ts", "W", "pred_err"):
+                for k in ("ahu_on", "ahu_p", "ahu_r", "ahu_set", "cs", "W", "pred_err", "theta", "start", "slow_a"):
                     if k in dbg:
                         rows[-1]["dbg_" + k] = np.array(dbg[k], dtype=float)
                 rows[-1]["dbg_active"] = float(dbg.get("active", 0))
