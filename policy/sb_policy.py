@@ -82,6 +82,7 @@ DEFAULT_PARAMS = dict(
     bank_eps=0.03,
     bank_lam=0.0,              # value of heat flushed out of satisfied zones, as a share of the gas price
     bank_heat_steps=6,         # ... on days that needed at least this many steps of reheat
+    bank_lam_h=0.0,            # credit for net heat left in the zones, as a share of the gas price
     # release of zones whose occupants have left for the day (afternoon only)
     rel_on=1,
     rel_delta=3.0,             # K the band is widened by for released zones
@@ -820,7 +821,10 @@ class SBPolicy:
         lam = 0.0
         if p["bank_lam"] > 0 and self.heat_steps_today >= p["bank_heat_steps"] and res.get("cool", 0.0) <= 0.0:
             lam = p["bank_lam"] * wg
-        best, best_rate = res, res["cost"] + lam * res.get("coll", 0.0)
+        lam_h = 0.0
+        if p["bank_lam_h"] > 0 and self.heat_steps_today >= p["bank_heat_steps"] and res.get("cool", 0.0) <= 0.0:
+            lam_h = p["bank_lam_h"] * wg
+        best, best_rate = res, res["cost"] + lam * res.get("coll", 0.0) - lam_h * res.get("h", 0.0)
         need_lo = np.array(lo, dtype=float).copy()
         need_hi = np.array(hi, dtype=float).copy()
         eps = p["bank_eps"]
@@ -840,7 +844,7 @@ class SBPolicy:
                                 p_cap, force=True)
             if r2 is None or r2["dev"] > 1e-6:
                 break
-            rate = (r2["cost"] + lam * r2["coll"]) / (n + 1)
+            rate = (r2["cost"] + lam * r2["coll"] - lam_h * r2["h"]) / (n + 1)
             if rate < p["bank_kappa"] * best_rate:
                 best, best_rate = r2, rate
         return best
