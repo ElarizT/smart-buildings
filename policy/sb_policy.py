@@ -56,6 +56,14 @@ DEFAULT_PARAMS = dict(
     p_pre=400.0,               # static pressure cap while pre-conditioning
     pre_margin=0.3,            # K of safety on the predicted start temperature
     pre_extra_steps=1,         # start this many steps earlier than predicted
+    # night flush (free cooling with outside air while unoccupied)
+    flush_on=1,
+    flush_window_steps=120,    # only in the last hours before occupancy
+    flush_delta=0.6,           # stop when the free-float temperature is this far above the band floor
+    flush_hyst=0.3,
+    flush_dt_min=2.5,          # zone must be this much warmer than outside
+    flush_net_w_m2=1.5,        # zone counts as cooling-prone if it net-cooled by this much last day
+    flush_ratio=0.3,           # flush zones needed per heating-prone zone on the same air handler
     # holiday / end-of-day detection
     holiday_steps=6,
     # hot water
@@ -239,6 +247,11 @@ class SBPolicy:
         self.prev_cnow = None
         self.start_heat = np.zeros(self.N, dtype=bool)
         self.start_cool = np.zeros(self.N, dtype=bool)
+        self.day_net = np.zeros(self.N)       # net HVAC heat into each zone over the occupied day (W-steps)
+        self.day_cnt = 0
+        self.last_net = None                  # mean of the above for the last occupied day (W)
+        self.flushing = np.zeros(self.N, dtype=bool)
+        self.was_window = False
         # slow-model normal equations per zone
         lam = np.array([p["slow_lam_a"], p["slow_lam_b"], p["slow_lam_c"]])
         prior = np.array([p["slow_a0"], p["slow_b0"], 0.0])
@@ -422,6 +435,38 @@ class SBPolicy:
                 cs_plan[z] = res["c"]
                 cw_need[z] = res["cw"]
 
+        # ---- night flush with outside air -----------------------------------
+        if (p["flush_on"] and mode != "occ" and steps_to_start is not None
+                and 2 <= steps_to_start <= p["flush_window_steps"]):
+            th_tgt = lo + p["flush_delta"]
+            if self.last_net is None:
+                prone = theta > hi - 1.0
+                heat_prone = np.zeros(N, dtype=bool)
+            else:
+                prone = self.last_net < -p["flush_net_w_m2"] * self.area
+                heat_prone = self.last_net > p["flush_net_w_m2"] * self.area
+            want = prone & (zt - t_out > p["flush_dt_min"]) & (
+                theta > th_tgt + np.where(self.flushing, 0.0, p["flush_hyst"]))
+            self.flushing[:] = False
+            sq = math.sqrt(p["p_min"] / p["p_des"])
+            for a in range(K):
+                z = self.ahu_zones[a]
+                if ahu_on[a] or z.size == 0:
+                    continue
+                wz = want[z]
+                if wz.sum() == 0 or wz.sum() < p["flush_ratio"] * heat_prone[z].sum():
+                    continue
+                ahu_on[a] = True
+                ahu_set[a] = self.sat_rng[1]
+                ahu_p[a] = p["p_min"]
+                ahu_r[a] = 0.0
+                d_cmd[z] = np.where(wz, 1.0, p["d_min"])
+                cs_plan[z] = d_cmd[z] * fmax[z] * sq * RHOCP
+                cw_need[z] = 0.0
+                self.flushing[z] = wz
+        else:
+            self.flushing[:] = False
+
         # ---- hot water plant ---------------------------------------------
         kw = p["kv"] / 3600.0 * WATER_C        # W/K per sqrt(bar) at valve = 1
         heat_on = bool(np.any(cw_need > 1e-6))
@@ -455,7 +500,17 @@ class SBPolicy:
         self.p2 = self.p1
         self.p1 = dict(cs=cs_plan, cw=cw_need, r=ahu_r.copy(), tset=ahu_set.copy(),
                        on=ahu_on.copy(), t_out=t_out, t_w=t_w, cnow=cnow)
-        self.dbg.update(hour=hour, dow=dow, active=(mode != "off"), mode=mode, ahu_on=ahu_on.copy(),
+        if mode == "occ":
+            qn, tsn = self._realize(self.p1, zt)
+            self.day_net += qn + cs_plan * (tsn - zt)
+            self.day_cnt += 1
+        if self.was_window and not in_window:
+            if self.day_cnt > 24:
+                self.last_net = self.day_net / self.day_cnt
+            self.day_net = np.zeros(N)
+            self.day_cnt = 0
+        self.was_window = in_window
+        self.dbg.update(hour=hour, dow=dow, active=bool(ahu_on.any()), mode=mode, ahu_on=ahu_on.copy(),
                         ahu_set=ahu_set.copy(), ahu_p=ahu_p.copy(), ahu_r=ahu_r.copy(),
                         cs=cs_plan.copy(), W=W.copy(), theta=theta.copy(), dp=dp,
                         start=(self.start_heat | self.start_cool).astype(float),
