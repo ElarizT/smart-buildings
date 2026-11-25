@@ -31,8 +31,27 @@ Target: Kaggle LB <= 0.0088 (top 10). Score = mean over scenarios of -(episode r
 - Holidays: the comfort schedule has no holidays but the occupancy model does (US federal holidays),
   so on a holiday the band is "comfort" but nobody arrives. Detected from zero occupancy after 06:30.
 
+- **Gateway serialization scrambles dict order.** `ahu_zone_assignments` arrives with its keys in a
+  different order than locally (e.g. ahu_4, ahu_3, ...), while `temp_indices` etc. stay positional in
+  AHU-number order. A policy that maps AHU index to dict order silently drives the wrong zones
+  (600-step test: -1.41 through the gateway vs -0.31 direct). Fixed by sorting AHU ids by number;
+  the local gateway test (`kaggle/submission_local.py`) now reproduces the direct runner bit-for-bit.
+- Output file of the notebook is `submission.parquet`. Daily limit: 5 submissions.
+- Kaggle runtime: 8641 steps of building_train_1/atlanta_2 in 760 s (88 ms/step), policy ~1 ms/step.
+
+## Local tooling
+
+- `tools/sbrun.py` one scenario, reward/energy breakdown, optional trace. `tools/run_batch.py` runs a
+  scenario set 4-wide and caches per-scenario JSON under `results/<tag>/`.
+- `tools/make_val.py` builds the held-out validation set: 12 new buildings (seeds 601-613, sized like
+  the shipped six) x {one Minneapolis strip, one strip unused by the training set} = 24 scenarios.
+- `tools/make_notebook.py` embeds `policy/sb_policy.py` into `kaggle/<slug>.ipynb`.
+  Local gateway test: `SB_COMPETITION_DATA_FOLDER=<competition files>/ python kaggle/submission_local.py`.
+
 ## Experiment log
 
 | version | description | local score | LB |
 |---|---|---|---|
 | baselines | pid_water 0.0541, fixed_setpoint 0.0659, pid 0.0674, bang_bang 0.225 (30 train scenarios) | — | — |
+| v2 | per-zone one-step model + observer, per-AHU cost optimiser, fixed 3-step pre-start (sensor lag handled) | first 4 train scenarios: atlanta_2 0.00286, denver_7 0.00177, fairbanks_1 0.06278, phoenix_5 0.01444 | not submitted |
+| v3 | + optimal start from online slow-state model (theta = W/Kss), pre-start pressure cap 400 Pa, finer economiser candidates | same 4: 0.00281 / 0.00172 / 0.04410 / 0.01413 (full table below when the run completes) | submitted 2026-11-25 01:17 UTC (kernel v1, ref 58859225), pending |
