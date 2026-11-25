@@ -1,0 +1,30 @@
+{
+ "scenario": "building_train_2/denver_8",
+ "policy": "sb_policy:SBPolicy",
+ "total_steps": 2880,
+ "total_reward": -10.112531841092277,
+ "score": 0.0035112957781570408,
+ "comfort_sum": -0.008584241544014048,
+ "cost_sum": 15.409671406494454,
+ "carbon_sum": 35.12723509539501,
+ "comfort_part": 1.7883836550029267e-06,
+ "cost_part": 0.0010701160698954482,
+ "carbon_part": 0.002439391326069098,
+ "mean_kw": {
+  "fan": 1.0882029690212673,
+  "cool": 0.18923883575879866,
+  "pump": 0.0493472834999313,
+  "gas": 26.377721235699124
+ },
+ "release": {
+  "true": 0,
+  "false": 0,
+  "false_wt": 0.0,
+  "empty": 24129
+ },
+ "wall_s": 338.662317276001,
+ "policy_s": 4.86292290687561,
+ "policy_init_s": 0.021064281463623047,
+ "n_ahu": 9,
+ "n_zone": 85
+}

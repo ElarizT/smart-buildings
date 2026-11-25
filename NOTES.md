@@ -386,3 +386,14 @@ yesterday is -0.08..+0.06 (last departure -0.03..+0.07), and the spread of per-z
 equals the sampling spread of i.i.d. draws (5.8 vs 5.6 steps, 7.9 vs 7.9, 6.7 vs 6.1, 6.3 vs 6.7). What can
 be learnt is the population model: the filter re-estimates the arrival and departure hazards from the
 episode's own count curve (bounded to 1/72..1/18) and the occupants-per-zone number from the daily peak.
+
+**LB result 3 (2026-11-25): v6 = 0.00955 public** (v5 0.00964, v3 0.01003). Board/local ratio 1.447.
+
+**Perfect-foresight bound on all 30 training scenarios (10 days each, 2 h lead, crude oracle, analysis
+only; `results/o_base10` vs `results/o_fore24`).** Mean 0.00677 -> 0.00650, **-4.0%**. Per scenario: mild
+and shoulder-season cases -5..-16% (building_train_4/fairbanks_4 -15.6%, building_train_7/atlanta_8 -15.0%,
+building_train_4/denver_2 -12.3%), hot cases -2..-5%, deep cold -3.5..+0.6% (the 2 h lead is too short for
+building_train_1/fairbanks_1, comfort 0.001). A tuned foresight controller might reach -5..-6%.
+**Correction to the estimate above:** foresight is worth ~4-6% of the mean score, not 5-8%, so it does not
+by itself explain the ~6% gap between v6 (0.00955) and the top-10 (~0.0090); what the leaders do is not
+known to me.

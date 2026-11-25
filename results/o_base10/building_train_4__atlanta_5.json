@@ -1,0 +1,30 @@
+{
+ "scenario": "building_train_4/atlanta_5",
+ "policy": "sb_policy:SBPolicy",
+ "total_steps": 2880,
+ "total_reward": -16.920679415692575,
+ "score": 0.005875235908226589,
+ "comfort_sum": -0.0032364004098468513,
+ "cost_sum": 68.69329400500283,
+ "carbon_sum": 15.9003938192036,
+ "comfort_part": 6.742500853847606e-07,
+ "cost_part": 0.004770367639236308,
+ "carbon_part": 0.0011041940152224723,
+ "mean_kw": {
+  "fan": 1.04321085073683,
+  "cool": 14.024085790761312,
+  "pump": 0.0,
+  "gas": 0.0
+ },
+ "release": {
+  "true": 14135,
+  "false": 0,
+  "false_wt": 0.0,
+  "empty": 28554
+ },
+ "wall_s": 519.5788109302521,
+ "policy_s": 8.475870609283447,
+ "policy_init_s": 0.02973031997680664,
+ "n_ahu": 6,
+ "n_zone": 54
+}
