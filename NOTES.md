@@ -274,3 +274,10 @@ episode). Tested on the first 17 days (base 0.03212):
 - lower pre-start cap (250 Pa): 0.03328, worse.
 - cap on occupied-hours pressure: 1200 Pa 0.03203, 800 Pa 0.03189, 500 Pa 0.03195 -> adopt 800 Pa with a
   guard rail (cap lifted for an air handler when any of its zones is more than 3 K outside the band).
+
+**Upper bound on occupancy awareness (oracle experiment, analysis only).** Feeding the policy the true
+per-zone occupancy from a recorded trace (zones conditioned only from 2 steps before someone is present,
+all day including mornings, others relaxed by 3 K) improves on the heat-signature tracker by only 3.1% on
+building_train_8/fairbanks_8 and 2.3% on building_train_8/phoenix_4 (10 days). So the tracker already
+captures more than half of what perfect knowledge could give, and no occupancy trick (including replaying
+the occupancy RNG) is worth more than ~3% from here.

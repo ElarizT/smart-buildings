@@ -53,6 +53,8 @@ DEFAULT_PARAMS = dict(
     slow_lam_c=1.0e3,
     # optimal start
     max_lead_steps=144,
+    oracle_file="",            # analysis only
+    oracle_lead=3,
     p_occ_max=800.0,           # static pressure cap while occupied
     guard_k=3.0,               # K outside the band at which the occupied pressure cap is lifted
     p_pre=400.0,               # static pressure cap while pre-conditioning
@@ -301,6 +303,11 @@ class SBPolicy:
         self.start_cool = np.zeros(self.N, dtype=bool)
         self.late = np.zeros(self.N, dtype=bool)
         self.rel_block = False
+        self.oracle = None
+        if p.get("oracle_file"):
+            _o = np.load(p["oracle_file"])
+            _vid = [str(v) for v in _o["vav_ids"]]
+            self.oracle = _o["zocc"][:, [_vid.index(z) for z in self.zone_ids]]
         self.day_net = np.zeros(self.N)       # net HVAC heat into each zone over the occupied day (W-steps)
         self.day_cnt = 0
         self.last_net = None                  # mean of the above for the last occupied day (W)
@@ -488,7 +495,14 @@ class SBPolicy:
                 mode = "occ"
                 lo_z[:] = lo
                 hi_z[:] = hi
-                if p["rel_on"] and self.released.any():
+                if self.oracle is not None:
+                    # ANALYSIS ONLY: true per-zone occupancy from a recorded trace (upper bound study)
+                    r0 = max(self.step - 1, 0)
+                    r1 = min(r0 + int(p["oracle_lead"]) + 1, self.oracle.shape[0])
+                    need = self.oracle[r0:r1].max(0) > 0 if r1 > r0 else np.ones(N, dtype=bool)
+                    lo_z = np.where(need, lo, lo - p["rel_delta"])
+                    hi_z = np.where(need, hi, hi + p["rel_delta"])
+                elif p["rel_on"] and self.released.any():
                     self.rel_off = np.where(
                         self.released, np.minimum(self.rel_off + p["rel_ramp"], p["rel_delta"]), 0.0)
                     lo_z = lo_z - self.rel_off
