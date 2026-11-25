@@ -1,0 +1,30 @@
+{
+ "scenario": "building_val_611/minneapolis_2",
+ "policy": "sb_policy_v5:SBPolicy",
+ "total_steps": 8640,
+ "total_reward": -138.49404132785276,
+ "score": 0.01602940293146444,
+ "comfort_sum": -0.0005822753882966936,
+ "cost_sum": 193.0175453077536,
+ "carbon_sum": 499.4509147978388,
+ "comfort_part": 4.043579085393705e-08,
+ "cost_part": 0.0044679987339757785,
+ "carbon_part": 0.011561363768468492,
+ "mean_kw": {
+  "fan": 1.288904845598009,
+  "cool": 0.15880547927640104,
+  "pump": 0.14875176504151033,
+  "gas": 70.43523723908883
+ },
+ "release": {
+  "true": 17905,
+  "false": 0,
+  "false_wt": 0.0,
+  "empty": 44310
+ },
+ "wall_s": 682.3496422767639,
+ "policy_s": 10.263511896133423,
+ "policy_init_s": 0.004782199859619141,
+ "n_ahu": 5,
+ "n_zone": 47
+}

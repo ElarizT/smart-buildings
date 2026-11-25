@@ -1,0 +1,25 @@
+building_val_601/atlanta_4           score 0.00584  comfort -0.00000 cost 0.00474 carbon 0.00110  kW fan 1.44 cool 18.55 gas 0.03
+building_val_601/minneapolis_1       score 0.01547  comfort 0.00000 cost 0.00439 carbon 0.01107  kW fan 1.66 cool 0.08 gas 108.54
+building_val_602/atlanta_7           score 0.00334  comfort 0.00001 cost 0.00196 carbon 0.00137  kW fan 1.14 cool 4.13 gas 7.24
+building_val_602/minneapolis_2       score 0.02163  comfort 0.00000 cost 0.00596 carbon 0.01567  kW fan 1.97 cool 0.07 gas 114.82
+building_val_604/denver_1            score 0.01467  comfort 0.00001 cost 0.00419 carbon 0.01048  kW fan 1.34 cool 0.03 gas 76.82
+building_val_604/minneapolis_3       score 0.00704  comfort 0.00001 cost 0.00209 carbon 0.00494  kW fan 0.80 cool 1.05 gas 35.67
+building_val_605/denver_4            score 0.00255  comfort -0.00000 cost 0.00193 carbon 0.00062  kW fan 1.52 cool 6.37 gas 1.79
+building_val_605/minneapolis_4       score 0.00332  comfort 0.00000 cost 0.00243 carbon 0.00089  kW fan 1.68 cool 8.10 gas 3.41
+building_val_606/fairbanks_3         score 0.02155  comfort 0.00001 cost 0.00573 carbon 0.01581  kW fan 1.96 cool 0.09 gas 115.98
+building_val_606/minneapolis_5       score 0.00392  comfort 0.00000 cost 0.00313 carbon 0.00079  kW fan 1.22 cool 8.58 gas 0.53
+building_val_607/fairbanks_6         score 0.00078  comfort -0.00000 cost 0.00056 carbon 0.00021  kW fan 1.17 cool 0.80 gas 0.76
+building_val_607/minneapolis_6       score 0.00248  comfort -0.00000 cost 0.00201 carbon 0.00047  kW fan 1.37 cool 6.01 gas 0.05
+building_val_608/minneapolis_7       score 0.00137  comfort -0.00000 cost 0.00074 carbon 0.00063  kW fan 0.53 cool 1.34 gas 3.60
+building_val_608/phoenix_2           score 0.00194  comfort -0.00000 cost 0.00154 carbon 0.00040  kW fan 0.72 cool 4.21 gas 0.24
+building_val_609/minneapolis_8       score 0.00432  comfort -0.00000 cost 0.00121 carbon 0.00311  kW fan 0.41 cool 0.02 gas 18.92
+building_val_609/phoenix_7           score 0.00293  comfort -0.00000 cost 0.00235 carbon 0.00057  kW fan 0.81 cool 5.49 gas 0.11
+building_val_610/minneapolis_1       score 0.03475  comfort 0.00035 cost 0.01006 carbon 0.02434  kW fan 4.87 cool 0.01 gas 237.45
+building_val_610/singapore_2         score 0.00598  comfort 0.00003 cost 0.00481 carbon 0.00114  kW fan 1.36 cool 19.44 gas 0.02
+building_val_611/minneapolis_2       score 0.01603  comfort 0.00000 cost 0.00447 carbon 0.01156  kW fan 1.29 cool 0.16 gas 70.44
+building_val_611/singapore_5         score 0.00783  comfort -0.00000 cost 0.00637 carbon 0.00147  kW fan 1.06 cool 15.71 gas 0.02
+building_val_612/atlanta_4           score 0.00545  comfort -0.00000 cost 0.00442 carbon 0.00102  kW fan 1.24 cool 15.12 gas 0.03
+building_val_612/minneapolis_3       score 0.00357  comfort -0.00000 cost 0.00131 carbon 0.00226  kW fan 0.83 cool 1.59 gas 18.22
+building_val_613/atlanta_7           score 0.00304  comfort -0.00000 cost 0.00193 carbon 0.00112  kW fan 0.59 cool 2.14 gas 2.64
+building_val_613/minneapolis_4       score 0.00351  comfort -0.00000 cost 0.00241 carbon 0.00110  kW fan 0.60 cool 2.92 gas 2.17
+== v5_val: mean score 0.00806 over 24 scenarios (comfort 0.00002) in 3907s

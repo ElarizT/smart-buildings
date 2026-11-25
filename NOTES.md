@@ -177,3 +177,37 @@ Submissions so far:
 - 2026-11-25 01:17 UTC, kernel v1 = v3 (ref 58859225): pending.
 - 2026-11-25 04:23 UTC, kernel v2 = v5 (ref 58866701): pending. Kaggle commit run reproduced the local
   building_train_1/atlanta_2 score (0.00268). 3 submissions left today.
+
+### v5 on the held-out validation set (24 scenarios, mean 0.00806)
+
+12 new buildings (25-78 zones, 3-8 AHUs) x one Minneapolis strip and one strip unused in training.
+Comfort part: mean 0.00002, max 0.00035 (building_val_610/minneapolis_1). False released zone-steps: 0.
+The set is colder than the training set (12 of 24 scenarios are Minneapolis), hence the higher mean.
+
+| scenario | score | comfort | AHUs | zones | fan kW | cooling kW | gas kW |
+|---|---|---|---|---|---|---|---|
+| building_val_601/atlanta_4 | 0.00584 | -0.00000 | 8 | 75 | 1.44 | 18.55 | 0.0 |
+| building_val_601/minneapolis_1 | 0.01547 | 0.00000 | 8 | 75 | 1.66 | 0.08 | 108.5 |
+| building_val_602/atlanta_7 | 0.00334 | 0.00001 | 6 | 59 | 1.14 | 4.13 | 7.2 |
+| building_val_602/minneapolis_2 | 0.02163 | 0.00000 | 6 | 59 | 1.97 | 0.07 | 114.8 |
+| building_val_604/denver_1 | 0.01467 | 0.00001 | 6 | 47 | 1.34 | 0.03 | 76.8 |
+| building_val_604/minneapolis_3 | 0.00704 | 0.00001 | 6 | 47 | 0.80 | 1.05 | 35.7 |
+| building_val_605/denver_4 | 0.00255 | -0.00000 | 8 | 78 | 1.52 | 6.37 | 1.8 |
+| building_val_605/minneapolis_4 | 0.00332 | 0.00000 | 8 | 78 | 1.68 | 8.10 | 3.4 |
+| building_val_606/fairbanks_3 | 0.02155 | 0.00001 | 6 | 58 | 1.96 | 0.09 | 116.0 |
+| building_val_606/minneapolis_5 | 0.00392 | 0.00000 | 6 | 58 | 1.22 | 8.58 | 0.5 |
+| building_val_607/fairbanks_6 | 0.00078 | -0.00000 | 7 | 62 | 1.17 | 0.80 | 0.8 |
+| building_val_607/minneapolis_6 | 0.00248 | -0.00000 | 7 | 62 | 1.37 | 6.01 | 0.1 |
+| building_val_608/minneapolis_7 | 0.00137 | -0.00000 | 6 | 25 | 0.53 | 1.34 | 3.6 |
+| building_val_608/phoenix_2 | 0.00194 | -0.00000 | 6 | 25 | 0.72 | 4.21 | 0.2 |
+| building_val_609/minneapolis_8 | 0.00432 | -0.00000 | 5 | 29 | 0.41 | 0.02 | 18.9 |
+| building_val_609/phoenix_7 | 0.00293 | -0.00000 | 5 | 29 | 0.81 | 5.49 | 0.1 |
+| building_val_610/minneapolis_1 | 0.03475 | 0.00035 | 8 | 73 | 4.87 | 0.01 | 237.4 |
+| building_val_610/singapore_2 | 0.00598 | 0.00003 | 8 | 73 | 1.36 | 19.44 | 0.0 |
+| building_val_611/minneapolis_2 | 0.01603 | 0.00000 | 5 | 47 | 1.29 | 0.16 | 70.4 |
+| building_val_611/singapore_5 | 0.00783 | -0.00000 | 5 | 47 | 1.06 | 15.71 | 0.0 |
+| building_val_612/atlanta_4 | 0.00545 | -0.00000 | 7 | 63 | 1.24 | 15.12 | 0.0 |
+| building_val_612/minneapolis_3 | 0.00357 | -0.00000 | 7 | 63 | 0.83 | 1.59 | 18.2 |
+| building_val_613/atlanta_7 | 0.00304 | -0.00000 | 3 | 28 | 0.59 | 2.14 | 2.6 |
+| building_val_613/minneapolis_4 | 0.00351 | -0.00000 | 3 | 28 | 0.60 | 2.92 | 2.2 |
+
