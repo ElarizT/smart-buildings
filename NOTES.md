@@ -110,3 +110,27 @@ wrongly in winter Atlanta. Left in the code, disabled (`flush_on=0`).
 the mandatory 30% outside air: net zone heat must be delivered at <= 35 C discharge, so
 gas = net heat x (308.15 - T_supply) / (308.15 - T_zone). Nothing in the action space avoids this, so
 building_train_1/fairbanks_1 (0.044) is close to its physical floor.
+
+**Finding: per-zone occupancy is observable from heat signatures (v5).**
+`num_occupants` in the observation equals the reward's total occupancy one step earlier. Each occupant adds
+70 W of sensible heat to their zone, and the zone model's one-step disturbance measurement resolves that
+cleanly: afternoon innovation noise is 1-10 W per zone against a 65-67 W step, appearing exactly one policy
+call after the building-wide count changes. Arrivals stop at 12:59 and nobody returns after leaving, so a
+zone whose occupants have all been seen leaving is empty for the rest of the day and its comfort no longer
+counts. v5 counts departures per zone (only unambiguous signatures; any unexplained jump disqualifies the
+zone for the day) and widens the band of fully vacated zones by up to 3 K, ramped at 0.25 K/step.
+- Offline tracker on 8-workday traces: 0-4 false released zone-steps out of ~5,500-8,000 released.
+- First closed-loop test had one false release: a neighbour that had just been released cooled 1.6 K in one
+  step and pulled ~90 W through the doorway (door cells = air in `floor_plan` but wall in `zone_map`).
+  Fixed by ramping the release, compensating doorway exchange (15 W/K per door cell) and refusing to
+  attribute when there are more signatures than departures.
+- Short closed-loop tests after the fix: building_train_8/phoenix_4 (5 days) 0.009826 -> 0.009391 (-4.4%),
+  building_train_8/fairbanks_8 (7 days) 0.014177 -> 0.013837 (-2.4%), no false releases, ~70% of empty
+  zone-time captured.
+- Bug caught on the way: release flags must be cleared before the 05:55 action of the next day.
+
+**Finding: banking (pulsing an air handler so it can rest on alternate steps) is worth <1%** and adds
+model-excitation noise that would hurt the occupancy tracker; disabled (`bank_max_n=0`).
+
+| v4 | v3 + holiday recovery + banking | first 5 train scenarios within 1% of v3 (run stopped early) | not submitted |
+| v5 | v3 + holiday recovery (4 steps, revoked when anyone is seen) + release of vacated zones + margins 0.10 K + max lead 12 h | running | — |
