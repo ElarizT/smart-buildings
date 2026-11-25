@@ -211,3 +211,37 @@ The set is colder than the training set (12 of 24 scenarios are Minneapolis), he
 | building_val_613/atlanta_7 | 0.00304 | -0.00000 | 3 | 28 | 0.59 | 2.14 | 2.6 |
 | building_val_613/minneapolis_4 | 0.00351 | -0.00000 | 3 | 28 | 0.60 | 2.92 | 2.2 |
 
+
+### Parameter sensitivity (4 small scenarios x 10 days, base = v5 + adaptive holiday wait, mean 0.00921)
+
+| change | mean | note |
+|---|---|---|
+| rel_delta 5 | 0.00919 | release depth is not the limit |
+| rel_delta 5, rel_ramp 0.4 | 0.00918 | |
+| p_pre 300 / 700 | 0.00925 / 0.00922 | 400 Pa is about right |
+| m_heat = m_cool = 0.05 | 0.00916 | |
+| pre_margin 0.1, pre_extra_steps 0 | 0.00916 | small 06:00 misses appear |
+| comfort_scale 10 / 100 | 0.00921 / 0.00921 | no effect |
+| force-start within 2 steps of occupancy | 0.00921, comfort 0 | removes the 06:00 misses |
+| force-start + margins 0.05 + pre_margin 0.1 + extra 0 | 0.00914 | adopted as v6 |
+
+The controller is on a plateau with respect to its tuning knobs (each worth <1%); remaining gains have to be
+structural.
+
+**Evaluated and rejected**
+- Tracking morning arrivals to release zones where fewer people arrived than the per-zone maximum: only
+  15-40% of zones keep a clean record through the noisy first two hours, so the extra capture is ~3-5% of
+  empty zone-time for a real risk of releasing an occupied zone.
+- Relaxing not-yet-occupied zones in the morning: arrivals are unpredictable and detected two calls late;
+  the comfort cost of each late detection outweighs the saving until ~08:15, when few zones are still empty.
+- Pre-cooling before 06:00 on cheaper electricity, night setback floors, pre-heating at reduced air
+  temperature: each worth well under 1% on paper, some negative.
+
+**Deliberately not used: the occupancy RNG.** `RandomizedArrivalDepartureOccupancy` is seeded with a fixed
+default (17321) and no scenario overrides it, so arrival and departure times are a deterministic function of
+zone count and workday index and could in principle be replayed inside the policy to condition each zone
+just in time. That is exploiting a harness artefact rather than controlling the building, it is fragile, and
+it sits too close to the "no hard-coded signatures" rule, so the controller only uses what it can infer
+from live observations.
+
+| v6 | v5 + adaptive holiday wait (exp(-7) false-positive rate) + force-start within 2 steps of occupancy + margins 0.05 K, pre_margin 0.1 K | running | — |
