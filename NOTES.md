@@ -281,3 +281,7 @@ all day including mornings, others relaxed by 3 K) improves on the heat-signatur
 building_train_8/fairbanks_8 and 2.3% on building_train_8/phoenix_4 (10 days). So the tracker already
 captures more than half of what perfect knowledge could give, and no occupancy trick (including replaying
 the occupancy RNG) is worth more than ~3% from here.
+
+**LB result 2 (2026-11-25): v5 = 0.00964 public** (v3 0.01003, -3.9%). The local v3->v5 gain excluding
+the building_train_7 holiday days is about the same, so the hidden set did not contain a holiday-bug
+building and it is ~1.45x harsher than the training set. Board: #1 0.00870, #10 0.00896.
