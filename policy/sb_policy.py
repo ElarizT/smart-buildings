@@ -37,8 +37,8 @@ BIG = 1.0e9
 
 DEFAULT_PARAMS = dict(
     # comfort margins inside the band (K)
-    m_heat=0.10,
-    m_cool=0.10,
+    m_heat=0.05,
+    m_cool=0.05,
     # zone model
     cdt_per_m2=12.0,           # air heat capacity / step, W/K per m2
     g_per_m2=4.8,              # air <-> mass conductance, W/K per m2
@@ -54,8 +54,9 @@ DEFAULT_PARAMS = dict(
     # optimal start
     max_lead_steps=144,
     p_pre=400.0,               # static pressure cap while pre-conditioning
-    pre_margin=0.3,            # K of safety on the predicted start temperature
-    pre_extra_steps=1,         # start this many steps earlier than predicted
+    pre_margin=0.1,            # K of safety on the predicted start temperature
+    pre_extra_steps=0,         # start this many steps earlier than predicted
+    pre_force_steps=2,         # within this many steps of occupancy, start every zone that needs it
     # night flush (free cooling with outside air while unoccupied)
     flush_on=0,
     flush_window_steps=120,    # only in the last hours before occupancy
@@ -711,6 +712,11 @@ class SBPolicy:
         want_h = todo_h & (ta_o < lo)
         want_c = todo_c & (ta_o > hi)
         if not (want_h.any() or want_c.any()):
+            return
+        if n <= p["pre_force_steps"]:
+            # close to occupancy: start everything that would otherwise begin the day out of band
+            self.start_heat |= want_h
+            self.start_cool |= want_c
             return
         nb = max(n - p["pre_extra_steps"], 0)
         ta1, th1 = off_step(zt.copy(), theta.copy())
