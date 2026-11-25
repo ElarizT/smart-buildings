@@ -54,4 +54,59 @@ Target: Kaggle LB <= 0.0088 (top 10). Score = mean over scenarios of -(episode r
 |---|---|---|---|
 | baselines | pid_water 0.0541, fixed_setpoint 0.0659, pid 0.0674, bang_bang 0.225 (30 train scenarios) | — | — |
 | v2 | per-zone one-step model + observer, per-AHU cost optimiser, fixed 3-step pre-start (sensor lag handled) | first 4 train scenarios: atlanta_2 0.00286, denver_7 0.00177, fairbanks_1 0.06278, phoenix_5 0.01444 | not submitted |
-| v3 | + optimal start from online slow-state model (theta = W/Kss), pre-start pressure cap 400 Pa, finer economiser candidates | same 4: 0.00281 / 0.00172 / 0.04410 / 0.01413 (full table below when the run completes) | submitted 2026-11-25 01:17 UTC (kernel v1, ref 58859225), pending |
+| v3 | + optimal start from online slow-state model (theta = W/Kss), pre-start pressure cap 400 Pa, finer economiser candidates | **0.00825** (30 train scenarios, table below) | submitted 2026-11-25 01:17 UTC (kernel v1, ref 58859225), pending |
+
+### v3 on the 30 training scenarios (mean 0.00825)
+
+| scenario | score | comfort | cost | carbon | fan kW | cooling kW | gas kW |
+|---|---|---|---|---|---|---|---|
+| building_train_1/atlanta_2 | 0.00281 | -0.00000 | 0.00131 | 0.00149 | 0.75 | 1.19 | 6.3 |
+| building_train_1/denver_7 | 0.00172 | -0.00000 | 0.00072 | 0.00100 | 0.51 | 0.42 | 4.4 |
+| building_train_1/fairbanks_1 | 0.04410 | 0.00014 | 0.01257 | 0.03139 | 2.09 | 0.00 | 153.8 |
+| building_train_1/phoenix_5 | 0.01413 | -0.00000 | 0.01149 | 0.00264 | 1.33 | 22.86 | 0.0 |
+| building_train_1/singapore_8 | 0.00617 | -0.00000 | 0.00495 | 0.00123 | 0.69 | 10.45 | 0.0 |
+| building_train_2/atlanta_3 | 0.00280 | 0.00000 | 0.00223 | 0.00057 | 1.66 | 8.81 | 0.6 |
+| building_train_2/denver_8 | 0.00371 | 0.00001 | 0.00119 | 0.00252 | 1.30 | 0.40 | 27.0 |
+| building_train_2/fairbanks_2 | 0.01059 | 0.00000 | 0.00298 | 0.00760 | 1.66 | 0.16 | 83.3 |
+| building_train_2/phoenix_6 | 0.00703 | -0.00000 | 0.00571 | 0.00132 | 1.57 | 25.67 | 0.0 |
+| building_train_2/singapore_1 | 0.00464 | -0.00000 | 0.00373 | 0.00091 | 1.20 | 17.40 | 0.0 |
+| building_train_4/atlanta_5 | 0.00633 | -0.00000 | 0.00514 | 0.00119 | 1.02 | 15.17 | 0.0 |
+| building_train_4/denver_2 | 0.00495 | -0.00000 | 0.00144 | 0.00351 | 0.78 | 0.15 | 25.5 |
+| building_train_4/fairbanks_4 | 0.00123 | -0.00000 | 0.00058 | 0.00065 | 1.03 | 0.25 | 4.1 |
+| building_train_4/phoenix_8 | 0.00134 | -0.00000 | 0.00075 | 0.00059 | 1.14 | 0.79 | 3.3 |
+| building_train_4/singapore_3 | 0.00658 | -0.00000 | 0.00535 | 0.00123 | 1.02 | 15.82 | 0.0 |
+| building_train_5/atlanta_6 | 0.00407 | -0.00000 | 0.00330 | 0.00077 | 1.10 | 12.81 | 0.0 |
+| building_train_5/denver_3 | 0.00347 | 0.00001 | 0.00107 | 0.00240 | 0.95 | 0.53 | 22.9 |
+| building_train_5/fairbanks_5 | 0.00140 | -0.00000 | 0.00108 | 0.00032 | 1.54 | 2.87 | 0.8 |
+| building_train_5/phoenix_1 | 0.00207 | 0.00000 | 0.00080 | 0.00126 | 1.07 | 0.64 | 11.6 |
+| building_train_5/singapore_4 | 0.00526 | -0.00000 | 0.00427 | 0.00099 | 1.07 | 16.94 | 0.0 |
+| building_train_7/atlanta_8 | 0.01657 | 0.01120 | 0.00158 | 0.00380 | 0.52 | 0.09 | 18.4 |
+| building_train_7/denver_5 | 0.01339 | 0.00943 | 0.00318 | 0.00079 | 0.52 | 6.09 | 0.3 |
+| building_train_7/fairbanks_7 | 0.01015 | 0.00309 | 0.00185 | 0.00520 | 0.52 | 0.06 | 25.4 |
+| building_train_7/phoenix_3 | 0.01486 | 0.00967 | 0.00421 | 0.00098 | 0.62 | 8.20 | 0.0 |
+| building_train_7/singapore_6 | 0.01504 | 0.00981 | 0.00424 | 0.00099 | 0.54 | 8.44 | 0.0 |
+| building_train_8/atlanta_1 | 0.00415 | -0.00000 | 0.00128 | 0.00287 | 0.39 | 0.08 | 10.3 |
+| building_train_8/denver_6 | 0.00310 | -0.00000 | 0.00245 | 0.00065 | 0.48 | 3.33 | 0.3 |
+| building_train_8/fairbanks_8 | 0.02111 | 0.00000 | 0.00563 | 0.01548 | 0.83 | 0.00 | 56.8 |
+| building_train_8/phoenix_4 | 0.00940 | -0.00000 | 0.00764 | 0.00176 | 0.68 | 11.42 | 0.0 |
+| building_train_8/singapore_7 | 0.00523 | -0.00000 | 0.00423 | 0.00100 | 0.43 | 6.41 | 0.0 |
+
+By station: atlanta 0.0061, denver 0.0051, fairbanks 0.0148, phoenix 0.0081, singapore 0.0072.
+
+**Finding: false holiday detection (building_train_7, all five climates, comfort ~0.01 each).**
+The observed `num_occupants` is the reward's occupancy lagged one step. v3 declared a holiday after 6
+comfort steps with zero occupancy and never revoked it. With one occupant per zone and 36 zones, the first
+arrival is occasionally later than 06:30 (probability ~e^-6 per day); the occupancy RNG seed is fixed, so
+the same workday went wrong in every building_train_7 scenario and the plant stayed off all day (one day
+costs ~85 reward units = 0.0098 on the scenario score). Fix (v4): revoke the holiday flag as soon as any
+occupant is seen, detect after 4 steps. The pending v3 submission carries this risk for small buildings.
+
+**Finding: night flush with outside air is a net loss.** Tested on building_train_7/denver_5 (summer,
+cool nights): compressor energy fell 20% but fan energy doubled and morning reheat appeared; the comfort
+band already gives free storage and the building cools through the envelope at night anyway. Also triggered
+wrongly in winter Atlanta. Left in the code, disabled (`flush_on=0`).
+
+**Finding: deep-winter heating is ventilation-bound.** In Fairbanks at -35 C about 57% of the gas heats
+the mandatory 30% outside air: net zone heat must be delivered at <= 35 C discharge, so
+gas = net heat x (308.15 - T_supply) / (308.15 - T_zone). Nothing in the action space avoids this, so
+building_train_1/fairbanks_1 (0.044) is close to its physical floor.
