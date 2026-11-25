@@ -101,7 +101,13 @@ class SBPolicy:
         self.norm = md.get("observation_normalization_metadata", {}) or {}
 
         # ---- air handlers and their zones -------------------------------
-        self.ahu_ids = list(md["ahu_zone_assignments"].keys())
+        # dict order is not preserved across the gateway's serialization, and the
+        # positional index lists are in air-handler number order: sort by number.
+        def _num(name):
+            digits = "".join(ch for ch in str(name) if ch.isdigit())
+            return (int(digits) if digits else 10 ** 9, str(name))
+
+        self.ahu_ids = sorted(md["ahu_zone_assignments"].keys(), key=_num)
         self.K = len(md["temp_indices"])
         self.temp_idx = list(md["temp_indices"])
         self.recirc_idx = list(md["recirculation_indices"])
