@@ -133,4 +133,42 @@ zone for the day) and widens the band of fully vacated zones by up to 3 K, rampe
 model-excitation noise that would hurt the occupancy tracker; disabled (`bank_max_n=0`).
 
 | v4 | v3 + holiday recovery + banking | first 5 train scenarios within 1% of v3 (run stopped early) | not submitted |
-| v5 | v3 + holiday recovery (4 steps, revoked when anyone is seen) + release of vacated zones + margins 0.10 K + max lead 12 h | running | — |
+| v5 | v3 + holiday recovery (4 steps, revoked when anyone is seen) + release of vacated zones + margins 0.10 K + max lead 12 h | **0.00667** (30 train; every scenario better than v3; 2 false released zone-steps in total) | see below |
+
+### v5 on the 30 training scenarios (mean 0.00667; v3 was 0.00825)
+
+| scenario | v5 | v3 | v5 comfort | fan kW | cooling kW | gas kW |
+|---|---|---|---|---|---|---|
+| building_train_1/atlanta_2 | 0.00268 | 0.00281 | -0.00000 | 0.73 | 1.09 | 6.1 |
+| building_train_1/denver_7 | 0.00162 | 0.00172 | -0.00000 | 0.49 | 0.40 | 4.2 |
+| building_train_1/fairbanks_1 | 0.04357 | 0.04410 | -0.00000 | 1.96 | 0.00 | 152.5 |
+| building_train_1/phoenix_5 | 0.01367 | 0.01413 | -0.00000 | 1.31 | 22.13 | 0.0 |
+| building_train_1/singapore_8 | 0.00605 | 0.00617 | 0.00000 | 0.72 | 10.20 | 0.0 |
+| building_train_2/atlanta_3 | 0.00271 | 0.00280 | 0.00000 | 1.72 | 8.42 | 0.6 |
+| building_train_2/denver_8 | 0.00356 | 0.00371 | 0.00001 | 1.27 | 0.36 | 25.8 |
+| building_train_2/fairbanks_2 | 0.01040 | 0.01059 | 0.00000 | 1.66 | 0.13 | 81.7 |
+| building_train_2/phoenix_6 | 0.00685 | 0.00703 | -0.00000 | 1.57 | 25.02 | 0.0 |
+| building_train_2/singapore_1 | 0.00456 | 0.00464 | -0.00000 | 1.27 | 17.05 | 0.0 |
+| building_train_4/atlanta_5 | 0.00609 | 0.00633 | -0.00000 | 1.09 | 14.52 | 0.0 |
+| building_train_4/denver_2 | 0.00474 | 0.00495 | -0.00000 | 0.75 | 0.13 | 24.4 |
+| building_train_4/fairbanks_4 | 0.00113 | 0.00123 | -0.00000 | 0.95 | 0.24 | 3.8 |
+| building_train_4/phoenix_8 | 0.00121 | 0.00134 | -0.00000 | 1.06 | 0.65 | 3.1 |
+| building_train_4/singapore_3 | 0.00639 | 0.00658 | -0.00000 | 1.08 | 15.30 | 0.0 |
+| building_train_5/atlanta_6 | 0.00399 | 0.00407 | 0.00000 | 1.16 | 12.49 | 0.0 |
+| building_train_5/denver_3 | 0.00334 | 0.00347 | 0.00001 | 0.91 | 0.47 | 22.1 |
+| building_train_5/fairbanks_5 | 0.00133 | 0.00140 | 0.00000 | 1.52 | 2.66 | 0.7 |
+| building_train_5/phoenix_1 | 0.00198 | 0.00207 | 0.00000 | 1.01 | 0.57 | 11.2 |
+| building_train_5/singapore_4 | 0.00517 | 0.00526 | 0.00000 | 1.12 | 16.60 | 0.0 |
+| building_train_7/atlanta_8 | 0.00580 | 0.01657 | 0.00014 | 0.53 | 0.07 | 19.4 |
+| building_train_7/denver_5 | 0.00401 | 0.01339 | 0.00008 | 0.57 | 6.01 | 0.2 |
+| building_train_7/fairbanks_7 | 0.00696 | 0.01015 | 0.00005 | 0.52 | 0.04 | 24.8 |
+| building_train_7/phoenix_3 | 0.00514 | 0.01486 | 0.00005 | 0.65 | 7.99 | 0.0 |
+| building_train_7/singapore_6 | 0.00529 | 0.01504 | 0.00010 | 0.59 | 8.33 | 0.0 |
+| building_train_8/atlanta_1 | 0.00399 | 0.00415 | 0.00000 | 0.37 | 0.06 | 10.0 |
+| building_train_8/denver_6 | 0.00294 | 0.00310 | 0.00000 | 0.49 | 3.13 | 0.3 |
+| building_train_8/fairbanks_8 | 0.02075 | 0.02111 | 0.00000 | 0.83 | 0.00 | 55.7 |
+| building_train_8/phoenix_4 | 0.00906 | 0.00940 | 0.00000 | 0.67 | 11.01 | 0.0 |
+| building_train_8/singapore_7 | 0.00512 | 0.00523 | -0.00000 | 0.46 | 6.25 | 0.0 |
+
+By station: atlanta 0.0042, denver 0.0034, fairbanks 0.0140, phoenix 0.0063, singapore 0.0054.
+The building_train_7 scenarios drop by 31-70% (holiday fix); all others by 1.2-9.6% (zone release, margins).
