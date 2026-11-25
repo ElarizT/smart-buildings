@@ -37,8 +37,8 @@ BIG = 1.0e9
 
 DEFAULT_PARAMS = dict(
     # comfort margins inside the band (K)
-    m_heat=0.15,
-    m_cool=0.15,
+    m_heat=0.10,
+    m_cool=0.10,
     # zone model
     cdt_per_m2=12.0,           # air heat capacity / step, W/K per m2
     g_per_m2=4.8,              # air <-> mass conductance, W/K per m2
@@ -52,7 +52,7 @@ DEFAULT_PARAMS = dict(
     slow_lam_b=2.0e4,
     slow_lam_c=1.0e3,
     # optimal start
-    max_lead_steps=96,
+    max_lead_steps=144,
     p_pre=400.0,               # static pressure cap while pre-conditioning
     pre_margin=0.3,            # K of safety on the predicted start temperature
     pre_extra_steps=1,         # start this many steps earlier than predicted
