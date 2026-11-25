@@ -1,0 +1,30 @@
+{
+ "scenario": "building_val_612/atlanta_4",
+ "policy": "sb_policy_v7:SBPolicy",
+ "total_steps": 8640,
+ "total_reward": -46.83292412940864,
+ "score": 0.005420477329792666,
+ "comfort_sum": -0.0007318196376502328,
+ "cost_sum": 190.09212471123578,
+ "carbon_sum": 44.07030060109628,
+ "comfort_part": 5.0820808170155056e-08,
+ "cost_part": 0.00440028066461194,
+ "carbon_part": 0.0010201458472475992,
+ "mean_kw": {
+  "fan": 1.2561174241525155,
+  "cool": 15.027743615256416,
+  "pump": 0.0,
+  "gas": 0.029634782362646526
+ },
+ "release": {
+  "true": 42398,
+  "false": 0,
+  "false_wt": 0.0,
+  "empty": 90771
+ },
+ "wall_s": 832.7088100910187,
+ "policy_s": 12.287110567092896,
+ "policy_init_s": 0.006966590881347656,
+ "n_ahu": 7,
+ "n_zone": 63
+}

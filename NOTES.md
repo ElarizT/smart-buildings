@@ -416,3 +416,17 @@ the training set, so neither was taken to the validation set or submitted.
 | arrival-prior filter, release at P(occ) < 0.3% | 0.00689 | +1.8% |
 | prior-driven morning relaxation (denver_2 only: base 0.00419, bound 0.00346) | 0.00417-0.00660 | -0.5%..+58% |
 | per-zone schedules learnt from earlier weekdays | n/a | no signal (day-to-day corr ~0) |
+
+## v7 on the held-out set (2026-11-25)
+
+| policy | train (30) | held-out (24) | scenarios worse than v6 | false releases |
+|---|---|---|---|---|
+| v6 (current LB entry, 0.00955) | 0.006602 | 0.007964 | | |
+| v7 (v6 + 800 Pa occupied pressure cap + release safety) | 0.006601 | 0.007961 | none | 0 |
+
+v7 is 0.01% better on train and 0.04% on held-out: a tie. At the board/local ratio of ~1.44 that is
+0.000005 on the leaderboard, below its five-decimal display. **Not submitted**; v6 stays the entry.
+
+Status: LB 0.00955 (v6); top-10 needs about 0.0090, i.e. a further ~6%. Measured remaining levers:
+perfect occupancy foresight is worth 4.0% (not reachable legitimately: arrival prior +2% worse, no
+learnable per-zone pattern), plant-level changes -0.4%..+4%. No legitimate route to top-10 found.
