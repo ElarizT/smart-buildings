@@ -172,3 +172,8 @@ model-excitation noise that would hurt the occupancy tracker; disabled (`bank_ma
 
 By station: atlanta 0.0042, denver 0.0034, fairbanks 0.0140, phoenix 0.0063, singapore 0.0054.
 The building_train_7 scenarios drop by 31-70% (holiday fix); all others by 1.2-9.6% (zone release, margins).
+
+Submissions so far:
+- 2026-11-25 01:17 UTC, kernel v1 = v3 (ref 58859225): pending.
+- 2026-11-25 04:23 UTC, kernel v2 = v5 (ref 58866701): pending. Kaggle commit run reproduced the local
+  building_train_1/atlanta_2 score (0.00268). 3 submissions left today.
