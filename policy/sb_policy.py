@@ -57,15 +57,20 @@ DEFAULT_PARAMS = dict(
     pre_margin=0.3,            # K of safety on the predicted start temperature
     pre_extra_steps=1,         # start this many steps earlier than predicted
     # night flush (free cooling with outside air while unoccupied)
-    flush_on=1,
+    flush_on=0,
     flush_window_steps=120,    # only in the last hours before occupancy
     flush_delta=0.6,           # stop when the free-float temperature is this far above the band floor
     flush_hyst=0.3,
     flush_dt_min=2.5,          # zone must be this much warmer than outside
     flush_net_w_m2=1.5,        # zone counts as cooling-prone if it net-cooled by this much last day
+    flush_mech_w=300.0,        # mean compressor W per air handler last day for flushing to pay
     flush_ratio=0.3,           # flush zones needed per heating-prone zone on the same air handler
+    # banking: over-deliver inside the band so the air handler can rest for n steps
+    bank_max_n=2,
+    bank_kappa=1.0,            # accept if banked cost < kappa * (n + 1) * steady cost
+    bank_eps=0.03,
     # holiday / end-of-day detection
-    holiday_steps=6,
+    holiday_steps=4,
     # hot water
     tw_set=350.0,
     dp_min=0.3,
@@ -251,6 +256,8 @@ class SBPolicy:
         self.day_cnt = 0
         self.last_net = None                  # mean of the above for the last occupied day (W)
         self.flushing = np.zeros(self.N, dtype=bool)
+        self.day_mech = np.zeros(self.K)      # compressor electricity per air handler over the day
+        self.last_mech = None
         self.was_window = False
         # slow-model normal equations per zone
         lam = np.array([p["slow_lam_a"], p["slow_lam_b"], p["slow_lam_c"]])
@@ -362,6 +369,8 @@ class SBPolicy:
                 self.occ_seen_today = True
             if (not self.occ_seen_today) and self.comfort_steps_today > p["holiday_steps"]:
                 self.holiday = True
+            if self.occ_seen_today:
+                self.holiday = False
             if hour >= 13.0 + 1e-6 and occ <= 0 and self.occ_seen_today:
                 self.day_done = True
         else:
@@ -382,6 +391,7 @@ class SBPolicy:
                     d = (d + 1) % 7
             steps_to_start = int(round(wait * 12.0))
 
+        steps_left = int(round((self.h_end - hj) * 12.0)) if in_window else 0
         lo = self.band_lo + p["m_heat"]
         hi = self.band_hi - p["m_cool"]
         lo_z = np.full(N, -BIG)
@@ -429,7 +439,11 @@ class SBPolicy:
                                      lo_z[z], hi_z[z], t_out, t_w, we, wg, p_cap)
                 if res is None:
                     continue
+                if mode == "occ" and p["bank_max_n"] > 0:
+                    res = self._bank(res, z, zt, W, lo, hi, fmax, t_out, t_w, we, wg, p_cap, steps_left)
                 ahu_on[a] = True
+                if mode == "occ":
+                    self.day_mech[a] += res["cool"]
                 ahu_set[a], ahu_p[a], ahu_r[a] = res["tset"], res["p"], res["r"]
                 d_cmd[z] = res["d"]
                 cs_plan[z] = res["c"]
@@ -440,10 +454,12 @@ class SBPolicy:
                 and 2 <= steps_to_start <= p["flush_window_steps"]):
             th_tgt = lo + p["flush_delta"]
             if self.last_net is None:
-                prone = theta > hi - 1.0
+                prone = np.zeros(N, dtype=bool)
                 heat_prone = np.zeros(N, dtype=bool)
             else:
-                prone = self.last_net < -p["flush_net_w_m2"] * self.area
+                # only worth it where yesterday's cooling needed the compressor
+                mech = (self.last_mech > p["flush_mech_w"])[self.zone_ahu]
+                prone = mech & (self.last_net < -p["flush_net_w_m2"] * self.area)
                 heat_prone = self.last_net > p["flush_net_w_m2"] * self.area
             want = prone & (zt - t_out > p["flush_dt_min"]) & (
                 theta > th_tgt + np.where(self.flushing, 0.0, p["flush_hyst"]))
@@ -507,6 +523,8 @@ class SBPolicy:
         if self.was_window and not in_window:
             if self.day_cnt > 24:
                 self.last_net = self.day_net / self.day_cnt
+                self.last_mech = self.day_mech / self.day_cnt
+            self.day_mech = np.zeros(K)
             self.day_net = np.zeros(N)
             self.day_cnt = 0
         self.was_window = in_window
@@ -584,6 +602,36 @@ class SBPolicy:
                 th = th + a * (ta - th) + b * (t_out - th) + c
             self.start_cool |= want_c & (ta > hi - marg + 1e-6)
 
+    def _bank(self, res, z, zt, W, lo, hi, fmax, t_out, t_w, we, wg, p_cap, steps_left):
+        """Try landing the zones far enough inside the band that the air handler
+        can stay off for the next n steps; keep it if cheaper per step."""
+        p = self.p
+        k0, cdt, w = self.k0[z], self.cdt[z], W[z]
+        best, best_rate = res, res["cost"]
+        need_lo = np.full(z.size, lo)
+        need_hi = np.full(z.size, hi)
+        eps = p["bank_eps"]
+        for n in range(1, int(p["bank_max_n"]) + 1):
+            if steps_left < n + 1:
+                break
+            # temperature needed now so that one more plant-off step still ends in band
+            need_lo = (k0 * (need_lo + (eps if n == 1 else 0.0)) - w) / cdt
+            need_hi = (k0 * (need_hi - (eps if n == 1 else 0.0)) - w) / cdt
+            lo_b = np.maximum(need_lo, lo)
+            hi_b = np.minimum(need_hi, hi)
+            if np.any(lo_b > hi_b - 0.05):
+                break
+            u_lo = k0 * lo_b - cdt * zt[z] - w
+            u_hi = k0 * hi_b - cdt * zt[z] - w
+            r2 = self._plan_ahu(zt[z], u_lo, u_hi, fmax[z], k0, lo_b, hi_b, t_out, t_w, we, wg,
+                                p_cap, force=True)
+            if r2 is None or r2["dev"] > 1e-6:
+                break
+            rate = r2["cost"] / (n + 1)
+            if rate < p["bank_kappa"] * best_rate:
+                best, best_rate = r2, rate
+        return best
+
     def _realize(self, plan, t_true):
         """Reheat power and supply temperature a stored plan produced on `t_true`."""
         p = self.p
@@ -618,7 +666,7 @@ class SBPolicy:
             self._cand = (R[:, None], T[:, None])
         return self._cand
 
-    def _plan_ahu(self, zt, u_lo, u_hi, fmax, k0, lo, hi, t_out, t_w, we, wg, p_cap):
+    def _plan_ahu(self, zt, u_lo, u_hi, fmax, k0, lo, hi, t_out, t_w, we, wg, p_cap, force=False):
         """Cheapest way to keep these zones inside their bounds at the next step.
 
         `lo`/`hi` are per-zone bounds (+-BIG when unconstrained); `u_lo`/`u_hi`
@@ -633,7 +681,7 @@ class SBPolicy:
         dev_off = (np.where(has_lo, np.maximum(u_lo, 0.0), 0.0)
                    + np.where(has_hi, np.maximum(-u_hi, 0.0), 0.0)) / k0
         cost_off = c_price * dev_off.sum()
-        if cost_off <= 0.0:
+        if cost_off <= 0.0 and not force:
             return None
 
         R, TSET = self._candidates()
@@ -696,7 +744,7 @@ class SBPolicy:
         gas = q.sum(1, keepdims=True)
         cost = (we * (fan + cool) + wg * gas + c_price * dev.sum(1, keepdims=True)).ravel()
         j = int(np.argmin(cost))
-        if cost[j] >= cost_off:
+        if cost[j] >= cost_off and not force:
             return None
         Cj = C[j]
         tsj = float(ts[j, 0])
@@ -704,4 +752,5 @@ class SBPolicy:
         cw = np.where(qj > 0, qj / max(t_w - tsj, 1.0), 0.0)
         d = np.clip(Cj / (fmax * float(sq[j, 0]) * RHOCP), p["d_min"], 1.0)
         return dict(tset=float(TSET[j, 0]), p=float(P[j, 0]), r=float(R[j, 0]),
-                    d=d, c=Cj, cw=cw, cost=float(cost[j]))
+                    d=d, c=Cj, cw=cw, cost=float(cost[j]), dev=float(dev[j].sum()),
+                    cool=float(cool[j, 0]))
