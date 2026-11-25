@@ -53,9 +53,14 @@ DEFAULT_PARAMS = dict(
     slow_lam_c=1.0e3,
     # optimal start
     max_lead_steps=144,
+    p_occ_max=800.0,           # static pressure cap while occupied
+    guard_k=3.0,               # K outside the band at which the occupied pressure cap is lifted
     p_pre=400.0,               # static pressure cap while pre-conditioning
     pre_margin=0.1,            # K of safety on the predicted start temperature
     pre_extra_steps=0,         # start this many steps earlier than predicted
+    pre_boost_steps=0,         # within this many steps of occupancy, late zones may use more fan pressure
+    p_boost=1000.0,
+    pre_late_k=0.3,
     pre_hold_steps=0,          # hold air at (band floor - pre_hold_k) this many steps before occupancy
     pre_hold_k=5.0,
     pre_force_steps=2,         # within this many steps of occupancy, start every zone that needs it
@@ -294,6 +299,7 @@ class SBPolicy:
         self.prev_cnow = None
         self.start_heat = np.zeros(self.N, dtype=bool)
         self.start_cool = np.zeros(self.N, dtype=bool)
+        self.late = np.zeros(self.N, dtype=bool)
         self.day_net = np.zeros(self.N)       # net HVAC heat into each zone over the occupied day (W-steps)
         self.day_cnt = 0
         self.last_net = None                  # mean of the above for the last occupied day (W)
@@ -460,7 +466,7 @@ class SBPolicy:
         hi = self.band_hi - p["m_cool"]
         lo_z = np.full(N, -BIG)
         hi_z = np.full(N, BIG)
-        p_cap = self.sp_rng[1]
+        p_cap = min(self.sp_rng[1], p["p_occ_max"])
         if cnow and in_window:
             self.occ_max_today = max(self.occ_max_today, occ)
             if p["rel_on"]:
@@ -519,8 +525,16 @@ class SBPolicy:
                 z = self.ahu_zones[a]
                 if z.size == 0:
                     continue
+                p_cap_a = p_cap
+                if mode == "pre" and self.late[z].any():
+                    p_cap_a = max(p_cap, p["p_boost"])
+                if mode == "occ":
+                    # guard rail: a zone far outside the band overrides the fan-power cap
+                    far = np.maximum(lo_z[z] - zt[z], zt[z] - hi_z[z])
+                    if np.any(far > p["guard_k"]):
+                        p_cap_a = self.sp_rng[1]
                 res = self._plan_ahu(zt[z], u_lo[z], u_hi[z], fmax[z], self.k0[z],
-                                     lo_z[z], hi_z[z], t_out, t_w, we, wg, p_cap)
+                                     lo_z[z], hi_z[z], t_out, t_w, we, wg, p_cap_a)
                 if res is None:
                     continue
                 if (mode == "occ" and p["bank_max_n"] > 0
@@ -699,14 +713,25 @@ class SBPolicy:
         p = self.p
         todo_h = ~self.start_heat
         todo_c = ~self.start_cool
-        if not (todo_h.any() or todo_c.any()):
-            return
         a, b, c = self.slow[:, 0], self.slow[:, 1], self.slow[:, 2]
         cdt, kss, k0 = self.cdt, self.kss, self.k0
         cs = fmax * math.sqrt(p["p_pre"] / p["p_des"]) * RHOCP
         t_heat = p["t_dis_max"]
         t_cool = self.sat_rng[0]
         marg = p["pre_margin"]
+        # zones already pre-conditioning that will still miss the band at this pressure
+        self.late[:] = False
+        if p["pre_boost_steps"] > 0 and n <= p["pre_boost_steps"] and (self.start_heat.any() or self.start_cool.any()):
+            ta, th = zt.copy(), theta.copy()
+            tc, thc = zt.copy(), theta.copy()
+            for _ in range(n + 1):
+                ta = (cdt * ta + kss * th + cs * t_heat) / (k0 + cs)
+                th = th + a * (ta - th) + b * (t_out - th) + c
+                tc = (cdt * tc + kss * thc + cs * t_cool) / (k0 + cs)
+                thc = thc + a * (tc - thc) + b * (t_out - thc) + c
+            self.late = (self.start_heat & (ta < lo - p["pre_late_k"])) | (self.start_cool & (tc > hi + p["pre_late_k"]))
+        if not (todo_h.any() or todo_c.any()):
+            return
 
         def off_step(ta, th):
             ta = (cdt * ta + kss * th) / k0

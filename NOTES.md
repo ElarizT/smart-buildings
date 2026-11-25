@@ -261,3 +261,16 @@ efficient while the zone air is cold (gas per unit of net heat is 1.4-1.6 at 280
 attractive. Measured on four cold/mild scenarios x 10 days (base 0.00845): hold 2 K below for 2 h 0.00898,
 5 K below for 4 h 0.00879, 3 K below for 6 h 0.00955. The extra envelope loss and air-handler run time
 outweigh the efficiency gain; the latest possible start stays.
+
+v6 on the validation set (24 scenarios): mean 0.00796 (v5 0.00806); no scenario worse than v5, no false
+releases, comfort part mean 0.00002.
+
+**Harsh-cold profile (building_val_610/minneapolis_1, the worst local scenario, 0.034).** Day-by-day: on
+-20 C days one or two large zones are capacity-limited (2 m3/s per VAV regardless of zone size), so they
+start the day 2-6 K below the band even after an all-night pre-start, the fan runs at up to 2000 Pa and the
+day costs ~5% in fan and ~5% in comfort on top of gas. A holiday Monday wastes a full pre-start (2% of the
+episode). Tested on the first 17 days (base 0.03212):
+- pre-start pressure boost for zones predicted late (700-1500 Pa in the last 2-6 h): 0.0331-0.0339, worse.
+- lower pre-start cap (250 Pa): 0.03328, worse.
+- cap on occupied-hours pressure: 1200 Pa 0.03203, 800 Pa 0.03189, 500 Pa 0.03195 -> adopt 800 Pa with a
+  guard rail (cap lifted for an air handler when any of its zones is more than 3 K outside the band).
