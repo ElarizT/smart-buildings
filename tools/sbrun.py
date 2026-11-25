@@ -156,7 +156,7 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
             dbg = getattr(policy, "dbg", None)
             if dbg:
                 for k in ("ahu_on", "ahu_p", "ahu_r", "ahu_set", "cs", "W", "pred_err", "theta", "start", "slow_a",
-                          "released", "dep", "dwm", "occ_obs"):
+                          "released", "dep", "dwm", "occ_obs", "p_occ"):
                     if k in dbg:
                         rows[-1]["dbg_" + k] = np.array(dbg[k], dtype=float)
                 rows[-1]["dbg_active"] = float(dbg.get("active", 0))

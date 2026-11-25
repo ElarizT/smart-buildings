@@ -355,3 +355,34 @@ off when no reheat is requested.
 **Release coverage.** 66-74% of empty afternoon zone-steps are released. The rest: departures counted but
 the zone flagged ambiguous/noisy 10-20%, one of two departures missed 6-8%, zones nobody came to all day up
 to 12% (one-occupant buildings). Worth ~1% if all were captured.
+
+## 2026-11-25: owner decision and legitimate-foresight experiments
+
+**Decision (owner): no occupancy-seed replay, nothing that reproduces the generator's random draws.** The
+fixed-seed leak (shared `RandomState(17321)` in `RandomizedArrivalDepartureOccupancy`, fixed draw order, so
+every arrival and departure is a deterministic function of zone count and workday index) stays documented
+here; the owner will report it to the organisers.
+
+**1. Arrival-time prior (from the generator's published model, no seeds).** Each absent person arrives with
+probability 1/36 per 5-min step from 06:00 to 12:59, each present person leaves with 1/36 per step from
+13:00 and everyone is out at 19:00. Consequences: P(person not yet in at 06:00+k steps) = (35/36)^k,
+9.4% of people never come on a given workday, and the process is memoryless, so the prior never says
+*which* zone is next. Implemented as a per-zone Bayesian filter (`pf_on`): state = number of occupants
+present; prediction from the hazards; evidence = building count (exact number of events per step) and each
+zone's 70 W signature with an online noise scale and an outlier term.
+- Morning relaxation driven by that posterior (`pf_am_s`: relax a zone when
+  P(occupied) x 0.12 m / N + E[absent] x hazard x 0.24 / N is below a threshold), building_train_4/denver_2,
+  10 days, base 0.00419, perfect foresight 0.00346: threshold 1e-4 -> 0.00417 (never triggers in the
+  morning), 5e-4 -> 0.00420, 2e-3 with 1.5 K -> 0.00660 (gas -4%, comfort 0.0026). The prior cannot buy the
+  morning saving: arrival signatures are only 30-65% detectable before 09:00 (false-positive rate 2-10% per
+  zone-step) and the first arrivals carry weight 1/N_present.
+- Afternoon release from the posterior (P(occupied) < 1%) on top of the hard tracker: denver_2 0.00417
+  (-0.5%, +11% released zone-steps, 66 false zone-steps without measurable comfort cost), phoenix_4 no
+  change. Full 30-scenario comparison below when the batch finishes.
+
+**2. Online learning within the episode.** Per-zone schedules are not learnable because there is nothing to
+learn: on 6-7 workdays x 4 scenarios the correlation between a zone's first-arrival step today and
+yesterday is -0.08..+0.06 (last departure -0.03..+0.07), and the spread of per-zone mean arrival times
+equals the sampling spread of i.i.d. draws (5.8 vs 5.6 steps, 7.9 vs 7.9, 6.7 vs 6.1, 6.3 vs 6.7). What can
+be learnt is the population model: the filter re-estimates the arrival and departure hazards from the
+episode's own count curve (bounded to 1/72..1/18) and the occupants-per-zone number from the daily peak.

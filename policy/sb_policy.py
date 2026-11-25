@@ -93,6 +93,14 @@ DEFAULT_PARAMS = dict(
     rel_sig_max=15.0,          # W: zones noisier than this are never released
     rel_lag=1,                 # count change that matches the current disturbance innovation
     rel_start_hour=13.0,
+    # probabilistic per-zone occupancy (arrival/departure prior + heat signatures + building count)
+    pf_on=0,
+    pf_eps=0.01,               # release when P(zone still occupied) is below this (afternoon)
+    pf_sig_min=8.0,            # W, floor on the innovation noise
+    pf_out=0.02,               # outlier share of the innovation likelihood
+    pf_hazard=1.0 / 36.0,      # prior arrival / departure probability per person and step
+    pf_am_s=0.0,               # >0: morning relaxation when the expected comfort cost per K is below this
+    pf_am_delta=1.0,
     # holiday / end-of-day detection
     holiday_steps=3,           # minimum steps of an empty comfort period before assuming a holiday
     holiday_exp=7.0,           # wait until exp(-holiday_exp) is the chance of a normal day looking empty
@@ -307,6 +315,12 @@ class SBPolicy:
         self.late = np.zeros(self.N, dtype=bool)
         self.rel_block = False
         self.heat_steps_today = 0
+        self.pz = np.zeros((self.N, 5)); self.pz[:, 0] = 1.0   # P(number of occupants present)
+        self.pf_rel = np.zeros(self.N, dtype=bool)
+        self.pf_am = np.zeros(self.N, dtype=bool)
+        self.pf_sig = np.full(self.N, 20.0)
+        self.haz_a = p["pf_hazard"]; self.haz_d = p["pf_hazard"]
+        self.haz_stat = np.zeros(4)           # arrivals, exposure, departures, exposure (learnt in-episode)
         self.oracle = None
         if p.get("oracle_file"):
             _o = np.load(p["oracle_file"])
@@ -481,9 +495,15 @@ class SBPolicy:
         p_cap = min(self.sp_rng[1], p["p_occ_max"])
         if cnow and in_window:
             self.occ_max_today = max(self.occ_max_today, occ)
+            if p["pf_on"]:
+                self._occ_filter(hour)
             if p["rel_on"]:
                 self._track_departures(hour)
         else:
+            self.pz[:] = 0.0
+            self.pz[:, 0] = 1.0
+            self.pf_rel[:] = False
+            self.pf_am[:] = False
             self.dep[:] = 0.0
             self.dirty[:] = False
             self.released[:] = False
@@ -492,6 +512,7 @@ class SBPolicy:
             if not cnow:
                 self.occ_max_today = 0.0
         mode = "off"
+        self.rel_eff = np.zeros(N, dtype=bool)
         if in_window:
             self.start_heat[:] = False
             self.start_cool[:] = False
@@ -508,11 +529,19 @@ class SBPolicy:
                         need[:] = True
                     lo_z = np.where(need, lo, lo - p["rel_delta"])
                     hi_z = np.where(need, hi, hi + p["rel_delta"])
-                elif p["rel_on"] and self.released.any():
-                    self.rel_off = np.where(
-                        self.released, np.minimum(self.rel_off + p["rel_ramp"], p["rel_delta"]), 0.0)
-                    lo_z = lo_z - self.rel_off
-                    hi_z = hi_z + self.rel_off
+                else:
+                    rel_now = self.released | (self.pf_rel & (not self.rel_block)) if p["rel_on"] else self.pf_rel & False
+                    self.rel_eff = rel_now
+                    if rel_now.any():
+                        self.rel_off = np.where(
+                            rel_now, np.minimum(self.rel_off + p["rel_ramp"], p["rel_delta"]), 0.0)
+                        lo_z = lo_z - self.rel_off
+                        hi_z = hi_z + self.rel_off
+                    else:
+                        self.rel_off[:] = 0.0
+                    if p["pf_on"] and p["pf_am_s"] > 0 and self.pf_am.any():
+                        lo_z = np.where(self.pf_am & ~rel_now, lo_z - p["pf_am_delta"], lo_z)
+                        hi_z = np.where(self.pf_am & ~rel_now, hi_z + p["pf_am_delta"], hi_z)
         elif steps_to_start is not None and steps_to_start <= p["max_lead_steps"]:
             mode = "pre"
             self._pre_mask = None
@@ -653,6 +682,11 @@ class SBPolicy:
         if self.was_window and not in_window:
             if self.occ_max_today > 0:
                 self.m_occ_est = max(1, int(round(self.occ_max_today / (0.9 * N))))
+            # population hazards learnt from this episode's own count curve (bounded around the prior)
+            if self.haz_stat[1] > 500:
+                self.haz_a = float(np.clip(self.haz_stat[0] / self.haz_stat[1], 1 / 72.0, 1 / 18.0))
+            if self.haz_stat[3] > 500:
+                self.haz_d = float(np.clip(self.haz_stat[2] / self.haz_stat[3], 1 / 72.0, 1 / 18.0))
             if self.day_cnt > 24:
                 self.last_net = self.day_net / self.day_cnt
                 self.last_mech = self.day_mech / self.day_cnt
@@ -664,7 +698,7 @@ class SBPolicy:
                         ahu_set=ahu_set.copy(), ahu_p=ahu_p.copy(), ahu_r=ahu_r.copy(),
                         cs=cs_plan.copy(), W=W.copy(), theta=theta.copy(), dp=dp,
                         start=(self.start_heat | self.start_cool).astype(float),
-                        released=self.released.astype(float), dep=self.dep.copy(),
+                        released=self.rel_eff.astype(float), dep=self.dep.copy(),
                         dwm=(self.dwm.copy() if self.dwm is not None else np.zeros(N)),
                         occ_obs=occ,
                         slow_a=self.slow[:, 0].copy(), holiday=self.holiday, day_done=self.day_done)
@@ -720,6 +754,80 @@ class SBPolicy:
         self.sig2 = np.where(quiet, 0.95 * self.sig2 + 0.05 * resid * resid, self.sig2)
         self.released = (self.released | ((self.dep >= m_occ) & ~self.dirty
                                           & (self.sig2 < p["rel_sig_max"] ** 2)))
+
+    def _occ_filter(self, hour):
+        """Per-zone posterior of how many occupants are present.
+
+        Prior: every absent person arrives with a fixed probability per step
+        until 13:00 and every present person leaves with a fixed probability per
+        step afterwards (the generator's published arrival/departure model; no
+        random draws are reproduced).  Evidence: the building count (exact
+        number of events per step) and each zone's 70 W heat signature.
+        """
+        p = self.p
+        if self.dwm is None:
+            return
+        N = self.N
+        d = int(round(self.occ_hist[1] - self.occ_hist[2]))
+        m = int(min(max(1, math.ceil(self.occ_max_today / N - 1e-9)), 4))
+        states = np.arange(5, dtype=float)[None, :]
+        am = hour < p["rel_start_hour"] + 0.16
+        comp = p["rel_door_w"] * (self.door @ self.dy - self.door_sum * self.dy)
+        x = self.dwm - np.median(self.dwm) - self.drift - comp
+        # innovation noise: per-zone running scale, never below the cross-zone spread right now
+        mad = 1.4826 * float(np.median(np.abs(x)))
+        sig = np.maximum(np.maximum(self.pf_sig, mad), p["pf_sig_min"])
+        # in-episode learning of the population hazards from the count curve
+        exp_n = float((self.pz * states).sum())
+        if am and hour >= self.h_start + 0.2:
+            self.haz_stat[0] += max(d, 0); self.haz_stat[1] += max(m * N - exp_n, 0.0)
+        elif not am:
+            self.haz_stat[2] += max(-d, 0); self.haz_stat[3] += max(exp_n, 0.0)
+        if d == 0:
+            self.pf_sig = np.sqrt(0.97 * self.pf_sig ** 2 + 0.03 * np.minimum(x * x, 200.0 ** 2))
+        else:
+            sgn = 1.0 if d > 0 else -1.0
+            if (sgn > 0) != am:
+                # arrival after the arrival window or departure before it: prior broken, stay safe
+                self.pz[:] = 0.0
+                self.pz[:, min(m, 4)] = 1.0
+            else:
+                avail = (m - states) if sgn > 0 else states            # people who could cause the event
+                avail = np.clip(avail, 0.0, None) * (states <= m)
+                rho = p["pf_out"]
+                l0 = (1 - rho) * np.exp(-0.5 * (x / sig) ** 2) / sig + rho / 240.0
+                l1 = (1 - rho) * np.exp(-0.5 * ((x - sgn * p["rel_heat_w"]) / sig) ** 2) / sig + rho / 240.0
+                w = avail * (l1 / l0)[:, None]                          # odds of an event, per zone and state
+                tot = float((self.pz * (w > 0)).sum())
+                k = min(abs(d), tot * 0.999)
+                if k > 1e-6:
+                    lo_l, hi_l = 1e-12, 1e12
+                    for _ in range(60):
+                        lam = math.sqrt(lo_l * hi_l)
+                        q = lam * w / (1.0 + lam * w)
+                        if float((self.pz * q).sum()) > k:
+                            hi_l = lam
+                        else:
+                            lo_l = lam
+                    q = lam * w / (1.0 + lam * w)
+                    moved = self.pz * q
+                    stay = self.pz - moved
+                    new = stay.copy()
+                    if sgn > 0:
+                        new[:, 1:] += moved[:, :-1]
+                    else:
+                        new[:, :-1] += moved[:, 1:]
+                    self.pz = new / np.maximum(new.sum(1, keepdims=True), 1e-12)
+        p_occ = 1.0 - self.pz[:, 0]
+        if not am:
+            self.pf_rel = self.pf_rel | (p_occ < p["pf_eps"])
+            self.pf_am[:] = False
+        elif p["pf_am_s"] > 0:
+            n_obs = max(self.occ_hist[0], 1.0)
+            absent = np.clip(m - (self.pz * states).sum(1), 0.0, None)
+            risk = (p_occ * 0.12 * m + absent * self.haz_a * 0.24) / n_obs
+            self.pf_am = risk < p["pf_am_s"]
+        self.dbg["p_occ"] = p_occ
 
     # ------------------------------------------------------------- slow model
     def _slow_update(self, theta, theta_prev, t_air, t_out):
