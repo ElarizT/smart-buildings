@@ -285,3 +285,73 @@ the occupancy RNG) is worth more than ~3% from here.
 **LB result 2 (2026-11-25): v5 = 0.00964 public** (v3 0.01003, -3.9%). The local v3->v5 gain excluding
 the building_train_7 holiday days is about the same, so the hidden set did not contain a holiday-bug
 building and it is ~1.45x harsher than the training set. Board: #1 0.00870, #10 0.00896.
+
+## 2026-11-25 (afternoon): where could another 8% come from? Audits and bounds
+
+Context: v5 is at 0.00964, the top-20 pack sits at 0.0087-0.0091. Public analysis notebooks report the same
+board/local ratio for a different controller family (public "DemandSized325" lineage: local 0.00687, board
+0.0099 in round 1), and say the hidden set has 48 scenarios. The board was reset on 2026-11-18 (round 2:
+energy-balanced tank, flow-weighted return air); the best public round-2 notebook claims 0.01002. So the
+ratio board/local ~= 1.44 is a property of the hidden set, and the pack corresponds to ~0.0061 on the 30
+training scenarios against 0.0066 for v6/v7.
+
+**Score concentration.** Train + validation (54 scenarios): ten deep-winter scenarios carry 51% of the total
+(building_train_1/fairbanks_1 0.043, building_val_610/minneapolis_1 0.034, ...). 
+
+**Deep-cold audit (building_train_1/fairbanks_1, -25..-33 C; `tools/sbrun.py` traces now record per-VAV flow,
+true supply temperature and coil heat).**
+- Coil heat = billed gas within 1%. 96-98% of the airflow is discharged at >= 34 C during occupied hours,
+  so heat is delivered at the best efficiency the plant allows; 54% of the gas is the mandatory 30% outside
+  air (gas = zone heat + 0.3 x flow x rho cp x (T_return - T_out)).
+- One workday at -32 C: pre-heat 02:30-06:00 13% of the day's gas, 06:00-13:00 61% (of which ~24% is
+  re-charging the thermal mass that cooled 4.4 K overnight), 13:00-19:00 26%. Holding 21 C all night would
+  cost ~21% more, so the setback is right; charging the mass earlier at lower air temperature was measured
+  worse (see above).
+- Releasing vacated zones deeper (rel_delta 30) or with perfect per-zone occupancy in the afternoon changes
+  the 10-day score by only -0.1..-0.4%: the afternoon saving (gas at 18:00 falls from 184 to 71 kW with an
+  oracle) is paid back the next morning because the released zones' mass has to be re-heated.
+- "Pulsing" potential (all net zone heat delivered at 35 C discharge, no throttled minimum-flow reheat):
+  0.3% of gas in deep cold, 1-3% in mild cold. Banking with a stored-heat credit and banking with a price on
+  heat flushed from satisfied zones were both implemented and measured on four mild-cold scenarios x 10 days:
+  0.00392 (base) vs 0.00393-0.00399. Rejected again; `bank_max_n=0` stays.
+
+**Hot audit (Phoenix/Singapore).** Supply air at the 285 K minimum, recirculation 0.7, 200 Pa: compressor
+load = flow x rho cp x (T_mix - T_supply) / 3.5 with the flow already minimal. Nothing left at plant level.
+
+**Mild-cold audit (building_train_4/denver_2).** 80% of the gas burns 05:00-10:00 (mass recharge after the
+night). Afternoon air handlers run because single interior zones sit at the top of the band and need free
+cooling; the minimum ventilation flow then flushes ~2 kW per air handler out of mid-band zones, but pulsing
+cannot avoid it profitably (measured). Tank standing loss is 6.25 W/K (0.45-0.67 kW), 3-6% of gas in mild
+scenarios and 0.4% in deep cold.
+
+**Upper bound with perfect foresight of per-zone occupancy (analysis hook `oracle_pre`, never shipped).**
+Zones are pre-conditioned only if someone arrives within the lead time; others float (10 days):
+
+| scenario | v7 | foresight, 3 h lead | foresight, 1 h lead |
+|---|---|---|---|
+| building_train_1/fairbanks_1 | 0.04953 | 0.04881 (-1.5%) | 0.05574 (comfort misses) |
+| building_train_8/fairbanks_8 | 0.01963 | 0.01907 (-2.9%) | 0.01940 |
+| building_train_8/phoenix_4 | 0.00911 | 0.00885 (-2.9%) | 0.00888 |
+| building_train_4/denver_2 | 0.00419 | 0.00379 (-9.5%) | 0.00346 (-17%) |
+
+In mild weather most of the morning gas warms zones nobody is in yet; waiting lets the 10 W/m2 clock-driven
+internal gains and the rising outdoor temperature do part of the work. This is the only lever of the right
+size (mild scenarios are light individually but numerous) found anywhere, and it needs *future* arrivals.
+Arrivals are memoryless (1/36 per step per person), so nothing observable predicts them; an honest
+approximation (hold empty zones slightly low and react to the 70 W signature two calls later) costs more
+comfort than it saves because early arrivals carry weight 1/N_present (re-derived: sum over arrivals of
+0.12 x delta x 2 / k).
+The only way to have that foresight is to replay the simulator's occupancy generator inside the policy
+(shared `RandomState(17321)`, fixed draw order). **Still deliberately not done** (see "Deliberately not used"
+above): it is an information leak of the harness, organisers have been patching such artefacts between
+rounds, a hard-coded seed plus a re-implemented occupancy model is exactly what a signature scan would
+flag, and the decision whether to take that risk with the account belongs to the owner. My estimate is
+that it is worth 5-8% on the board, i.e. roughly the gap between this controller and the top-10.
+
+Also noticed, not used: the hot-water "supervisor off" command zeroes the pump's electricity bill without
+stopping the water flow (0.3-0.7% of the score); an accounting artefact, the policy only switches the loop
+off when no reheat is requested.
+
+**Release coverage.** 66-74% of empty afternoon zone-steps are released. The rest: departures counted but
+the zone flagged ambiguous/noisy 10-20%, one of two departures missed 6-8%, zones nobody came to all day up
+to 12% (one-occupant buildings). Worth ~1% if all were captured.

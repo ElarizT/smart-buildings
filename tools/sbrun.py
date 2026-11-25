@@ -134,7 +134,22 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
                 damp=np.array([vavs[v].damper_setting for v in vav_ids]),
                 rh=np.array([vavs[v].reheat_valve_setting for v in vav_ids]),
                 ts=str(env.building.current_timestamp),
+                vflow=np.array([vavs[v].flow_rate_demand for v in vav_ids]),
+                sat=np.array([x.supply_air_temperature_sensor for x in ahus]),
+                rec=np.array([x.recirculation for x in ahus]),
+                psp=np.array([x.supply_air_static_pressure_setpoint for x in ahus]),
             ))
+            try:
+                _rt = sim._recirculation_temps(_avg)
+                _amb = float(ahus[0].outside_air_temperature_sensor)
+                _sat = {id(x): x.get_supply_air_temp(_rt[x.device_id()], _amb) for x in ahus}
+                rows[-1]["qrh"] = np.array([
+                    vavs[v].compute_reheat_energy_rate(_sat[id(vavs[v].air_handler)], hws.supply_water_temperature_sensor)
+                    for v in vav_ids])
+                rows[-1]["vsat"] = np.array([_sat[id(vavs[v].air_handler)] for v in vav_ids])
+            except Exception as e:  # pragma: no cover
+                if i == 0:
+                    print("qrh failed", e, file=sys.stderr)
             if mass_idx is not None:
                 mt = sim._solver._mass_temp
                 rows[-1]["zmass"] = np.array([mt[ix].mean() for ix in mass_idx])

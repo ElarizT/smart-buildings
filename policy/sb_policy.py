@@ -80,6 +80,8 @@ DEFAULT_PARAMS = dict(
     bank_rel_frac=0.5,         # only bank on air handlers where at least this share of zones is released
     bank_kappa=1.0,            # accept if banked cost < kappa * (n + 1) * steady cost
     bank_eps=0.03,
+    bank_lam=0.0,              # value of heat flushed out of satisfied zones, as a share of the gas price
+    bank_heat_steps=6,         # ... on days that needed at least this many steps of reheat
     # release of zones whose occupants have left for the day (afternoon only)
     rel_on=1,
     rel_delta=3.0,             # K the band is widened by for released zones
@@ -303,6 +305,7 @@ class SBPolicy:
         self.start_cool = np.zeros(self.N, dtype=bool)
         self.late = np.zeros(self.N, dtype=bool)
         self.rel_block = False
+        self.heat_steps_today = 0
         self.oracle = None
         if p.get("oracle_file"):
             _o = np.load(p["oracle_file"])
@@ -500,6 +503,8 @@ class SBPolicy:
                     r0 = max(self.step - 1, 0)
                     r1 = min(r0 + int(p["oracle_lead"]) + 1, self.oracle.shape[0])
                     need = self.oracle[r0:r1].max(0) > 0 if r1 > r0 else np.ones(N, dtype=bool)
+                    if p.get("oracle_pm_only", 0) and hour < 13.0 + 1e-6:
+                        need[:] = True
                     lo_z = np.where(need, lo, lo - p["rel_delta"])
                     hi_z = np.where(need, hi, hi + p["rel_delta"])
                 elif p["rel_on"] and self.released.any():
@@ -509,6 +514,11 @@ class SBPolicy:
                     hi_z = hi_z + self.rel_off
         elif steps_to_start is not None and steps_to_start <= p["max_lead_steps"]:
             mode = "pre"
+            self._pre_mask = None
+            if self.oracle is not None and p.get("oracle_pre", 0):
+                r0 = max(self.step - 1, 0)
+                r1 = min(r0 + steps_to_start + 2 + int(p["oracle_lead"]), self.oracle.shape[0])
+                self._pre_mask = (self.oracle[r0:r1].max(0) > 0) if r1 > r0 else None
             self._prestart(zt, theta, steps_to_start, lo, hi, t_out, fmax)
             lo_z[self.start_heat] = lo
             hi_z[self.start_cool] = hi
@@ -601,6 +611,10 @@ class SBPolicy:
         # ---- hot water plant ---------------------------------------------
         kw = p["kv"] / 3600.0 * WATER_C        # W/K per sqrt(bar) at valve = 1
         heat_on = bool(np.any(cw_need > 1e-6))
+        if steps_to_start is not None and steps_to_start == p["max_lead_steps"]:
+            self.heat_steps_today = 0
+        if heat_on:
+            self.heat_steps_today += 1
         dp = p["dp_min"]
         if heat_on:
             dp = float(np.clip((cw_need.max() / kw) ** 2, p["dp_min"], p["dp_max"]))
@@ -766,6 +780,9 @@ class SBPolicy:
             ta_o, th_o = off_step(ta_o, th_o)
         want_h = todo_h & (ta_o < lo)
         want_c = todo_c & (ta_o > hi)
+        if getattr(self, "_pre_mask", None) is not None:
+            want_h &= self._pre_mask
+            want_c &= self._pre_mask
         if not (want_h.any() or want_c.any()):
             return
         if n <= p["pre_force_steps"]:
@@ -790,10 +807,20 @@ class SBPolicy:
 
     def _bank(self, res, z, zt, W, lo, hi, fmax, t_out, t_w, we, wg, p_cap, steps_left):
         """Try landing the zones far enough inside the band that the air handler
-        can stay off for the next n steps; keep it if cheaper per step."""
+        can stay off for the next n steps; keep it if cheaper per step.
+
+        While heating, a running air handler pushes its minimum ventilation
+        flow through every zone and so carries heat out of the zones that need
+        none.  `bank_lam` prices that heat (as a share of the gas price), which
+        is what makes a short full-discharge pulse followed by rest cheaper than
+        holding the band edge continuously.
+        """
         p = self.p
         k0, cdt, w = self.k0[z], self.cdt[z], W[z]
-        best, best_rate = res, res["cost"]
+        lam = 0.0
+        if p["bank_lam"] > 0 and self.heat_steps_today >= p["bank_heat_steps"] and res.get("cool", 0.0) <= 0.0:
+            lam = p["bank_lam"] * wg
+        best, best_rate = res, res["cost"] + lam * res.get("coll", 0.0)
         need_lo = np.array(lo, dtype=float).copy()
         need_hi = np.array(hi, dtype=float).copy()
         eps = p["bank_eps"]
@@ -813,7 +840,7 @@ class SBPolicy:
                                 p_cap, force=True)
             if r2 is None or r2["dev"] > 1e-6:
                 break
-            rate = r2["cost"] / (n + 1)
+            rate = (r2["cost"] + lam * r2["coll"]) / (n + 1)
             if rate < p["bank_kappa"] * best_rate:
                 best, best_rate = r2, rate
         return best
@@ -939,4 +966,7 @@ class SBPolicy:
         d = np.clip(Cj / (fmax * float(sq[j, 0]) * RHOCP), p["d_min"], 1.0)
         return dict(tset=float(TSET[j, 0]), p=float(P[j, 0]), r=float(R[j, 0]),
                     d=d, c=Cj, cw=cw, cost=float(cost[j]), dev=float(dev[j].sum()),
-                    cool=float(cool[j, 0]))
+                    cool=float(cool[j, 0]), gas=float(gas[j, 0]),
+                    h=float((qj + Cj * (tsj - zt)).sum()),
+                    coll=float(np.where((ulo[0] <= 0) & (uhi[0] >= 0),
+                                        np.maximum(Cj * (zt - tsj) - qj, 0.0), 0.0).sum()))
