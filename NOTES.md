@@ -397,3 +397,22 @@ building_train_1/fairbanks_1, comfort 0.001). A tuned foresight controller might
 **Correction to the estimate above:** foresight is worth ~4-6% of the mean score, not 5-8%, so it does not
 by itself explain the ~6% gap between v6 (0.00955) and the top-10 (~0.0090); what the leaders do is not
 known to me.
+
+**Posterior-driven release on all 30 training scenarios (10 days; `results/o_pf01`, `results/o_pf003`).**
+Mean 0.00677 (base) -> 0.00691 at P(occupied) < 1% (**+2.1%, worse**) and 0.00689 at < 0.3% (+1.8%); the
+perfect-foresight bound is 0.00650 (-4.0%). The filter is over-confident: 0-298 falsely released zone-steps
+per scenario (hard tracker: ~0), and the scenarios with many of them lose 4-42% (building_train_7/denver_5
++42%, building_train_4/phoenix_8 +21%, building_train_2/atlanta_3 +13%), while the best gains are -0.6%.
+The heat signature cannot separate "never arrived" from "arrived during the noisy first hours", and the
+prior alone leaves 9% of people absent, so a posterior below 1% is reached mostly by mis-attributed
+departures. **Rejected; `pf_on=0` stays the default.** Neither legitimate-foresight variant beats v6/v7 on
+the training set, so neither was taken to the validation set or submitted.
+
+| variant (30 train scenarios x 10 days) | mean | vs base |
+|---|---|---|
+| base (v7) | 0.00677 | |
+| perfect foresight, 2 h lead (bound, not shippable) | 0.00650 | -4.0% |
+| arrival-prior filter, release at P(occ) < 1% | 0.00691 | +2.1% |
+| arrival-prior filter, release at P(occ) < 0.3% | 0.00689 | +1.8% |
+| prior-driven morning relaxation (denver_2 only: base 0.00419, bound 0.00346) | 0.00417-0.00660 | -0.5%..+58% |
+| per-zone schedules learnt from earlier weekdays | n/a | no signal (day-to-day corr ~0) |
