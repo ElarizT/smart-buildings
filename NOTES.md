@@ -244,4 +244,9 @@ just in time. That is exploiting a harness artefact rather than controlling the 
 it sits too close to the "no hard-coded signatures" rule, so the controller only uses what it can infer
 from live observations.
 
-| v6 | v5 + adaptive holiday wait (exp(-7) false-positive rate) + force-start within 2 steps of occupancy + margins 0.05 K, pre_margin 0.1 K | running | — |
+| v6 | v5 + adaptive holiday wait (exp(-7) false-positive rate) + force-start within 2 steps of occupancy + margins 0.05 K, pre_margin 0.1 K | **0.00660** (30 train; no scenario worse than v5; comfort part mean 0.000007) | submitted 2026-11-25 ~07:35 UTC (kernel v3, ref 58873131), pending |
+
+v6 full training set: mean 0.00660 (v5 0.00667, v3 0.00825). One false release event in
+building_train_4/fairbanks_4 (24 zone-steps, no measurable comfort cost) and the 2 zone-steps in
+building_train_2/fairbanks_2 seen in v5. Kaggle commit run of kernel v3 reproduced building_train_1/atlanta_2
+(-22.814 over 8641 steps = 0.00264). 2 submissions left today.
