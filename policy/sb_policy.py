@@ -56,6 +56,8 @@ DEFAULT_PARAMS = dict(
     p_pre=400.0,               # static pressure cap while pre-conditioning
     pre_margin=0.1,            # K of safety on the predicted start temperature
     pre_extra_steps=0,         # start this many steps earlier than predicted
+    pre_hold_steps=0,          # hold air at (band floor - pre_hold_k) this many steps before occupancy
+    pre_hold_k=5.0,
     pre_force_steps=2,         # within this many steps of occupancy, start every zone that needs it
     # night flush (free cooling with outside air while unoccupied)
     flush_on=0,
@@ -489,6 +491,9 @@ class SBPolicy:
             self._prestart(zt, theta, steps_to_start, lo, hi, t_out, fmax)
             lo_z[self.start_heat] = lo
             hi_z[self.start_cool] = hi
+            if p["pre_hold_steps"] > 0 and steps_to_start <= p["pre_hold_steps"]:
+                # charge the thermal mass early at a reduced air temperature
+                lo_z = np.maximum(lo_z, lo - p["pre_hold_k"])
             p_cap = p["p_pre"]
         else:
             self.start_heat[:] = False

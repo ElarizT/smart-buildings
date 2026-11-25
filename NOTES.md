@@ -250,3 +250,14 @@ v6 full training set: mean 0.00660 (v5 0.00667, v3 0.00825). One false release e
 building_train_4/fairbanks_4 (24 zone-steps, no measurable comfort cost) and the 2 zone-steps in
 building_train_2/fairbanks_2 seen in v5. Kaggle commit run of kernel v3 reproduced building_train_1/atlanta_2
 (-22.814 over 8641 steps = 0.00264). 2 submissions left today.
+
+**LB result 1 (2026-11-25): v3 = 0.01003 public** (local train 0.00825 including the holiday bug, ~0.0067
+without it). The hidden set is therefore roughly 1.2-1.5x harsher than the shipped training set, in line
+with what public notebooks report (board 5-30% above local). Current board: #1 0.00870, #10 0.00896.
+
+**Tested and rejected: pre-charging the thermal mass at a reduced air temperature.** Reheat is more
+efficient while the zone air is cold (gas per unit of net heat is 1.4-1.6 at 280-285 K against ~2.2 at
+294 K with -35 C outside), so holding the air a few K below the band for hours before occupancy looked
+attractive. Measured on four cold/mild scenarios x 10 days (base 0.00845): hold 2 K below for 2 h 0.00898,
+5 K below for 4 h 0.00879, 3 K below for 6 h 0.00955. The extra envelope loss and air-handler run time
+outweigh the efficiency gain; the latest possible start stays.
