@@ -68,6 +68,7 @@ DEFAULT_PARAMS = dict(
     flush_ratio=0.3,           # flush zones needed per heating-prone zone on the same air handler
     # banking: over-deliver inside the band so the air handler can rest for n steps
     bank_max_n=0,
+    bank_rel_frac=0.5,         # only bank on air handlers where at least this share of zones is released
     bank_kappa=1.0,            # accept if banked cost < kappa * (n + 1) * steady cost
     bank_eps=0.03,
     # release of zones whose occupants have left for the day (afternoon only)
@@ -517,8 +518,10 @@ class SBPolicy:
                                      lo_z[z], hi_z[z], t_out, t_w, we, wg, p_cap)
                 if res is None:
                     continue
-                if mode == "occ" and p["bank_max_n"] > 0:
-                    res = self._bank(res, z, zt, W, lo, hi, fmax, t_out, t_w, we, wg, p_cap, steps_left)
+                if (mode == "occ" and p["bank_max_n"] > 0
+                        and self.released[z].mean() >= p["bank_rel_frac"]):
+                    res = self._bank(res, z, zt, W, lo_z[z], hi_z[z], fmax, t_out, t_w, we, wg,
+                                     p_cap, steps_left)
                 ahu_on[a] = True
                 if mode == "occ":
                     self.day_mech[a] += res["cool"]
@@ -739,8 +742,8 @@ class SBPolicy:
         p = self.p
         k0, cdt, w = self.k0[z], self.cdt[z], W[z]
         best, best_rate = res, res["cost"]
-        need_lo = np.full(z.size, lo)
-        need_hi = np.full(z.size, hi)
+        need_lo = np.array(lo, dtype=float).copy()
+        need_hi = np.array(hi, dtype=float).copy()
         eps = p["bank_eps"]
         for n in range(1, int(p["bank_max_n"]) + 1):
             if steps_left < n + 1:
