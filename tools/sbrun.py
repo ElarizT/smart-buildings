@@ -105,7 +105,8 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
             zobs = np.array([vavs[v].zone_air_temperature for v in vav_ids])
             _avg = sim.building.get_zone_average_temps()
             zt = np.array([_avg[v.replace("VAV_", "room_")] for v in vav_ids])
-            occ = np.array([info.zone_reward_infos[z].average_occupancy for z in info.zone_reward_infos])
+            occ = np.array([info.zone_reward_infos[v.replace("VAV_", "room_")].average_occupancy
+                            for v in vav_ids])
             hs = next(iter(info.zone_reward_infos.values())).heating_setpoint_temperature
             cs = next(iter(info.zone_reward_infos.values())).cooling_setpoint_temperature
             rows.append(dict(
@@ -125,7 +126,8 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
                 rows[-1]["zmass"] = np.array([mt[ix].mean() for ix in mass_idx])
             dbg = getattr(policy, "dbg", None)
             if dbg:
-                for k in ("ahu_on", "ahu_p", "ahu_r", "ahu_set", "cs", "W", "pred_err", "theta", "start", "slow_a"):
+                for k in ("ahu_on", "ahu_p", "ahu_r", "ahu_set", "cs", "W", "pred_err", "theta", "start", "slow_a",
+                          "released", "dep", "dwm", "occ_obs"):
                     if k in dbg:
                         rows[-1]["dbg_" + k] = np.array(dbg[k], dtype=float)
                 rows[-1]["dbg_active"] = float(dbg.get("active", 0))

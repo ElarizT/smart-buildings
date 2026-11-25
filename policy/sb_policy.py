@@ -66,9 +66,19 @@ DEFAULT_PARAMS = dict(
     flush_mech_w=300.0,        # mean compressor W per air handler last day for flushing to pay
     flush_ratio=0.3,           # flush zones needed per heating-prone zone on the same air handler
     # banking: over-deliver inside the band so the air handler can rest for n steps
-    bank_max_n=2,
+    bank_max_n=0,
     bank_kappa=1.0,            # accept if banked cost < kappa * (n + 1) * steady cost
     bank_eps=0.03,
+    # release of zones whose occupants have left for the day (afternoon only)
+    rel_on=1,
+    rel_delta=3.0,             # K the band is widened by for released zones
+    rel_ramp=0.25,             # K per step the widening grows by (keeps neighbours quiet)
+    rel_door_w=15.0,           # W/K per doorway cell between adjacent zones
+    rel_heat_w=70.0,           # sensible heat per occupant
+    rel_tol=22.0,              # W: unexplained disturbance jump that disqualifies a zone
+    rel_sig_max=15.0,          # W: zones noisier than this are never released
+    rel_lag=1,                 # count change that matches the current disturbance innovation
+    rel_start_hour=13.0,
     # holiday / end-of-day detection
     holiday_steps=4,
     # hot water
@@ -226,6 +236,33 @@ class SBPolicy:
                             faces[i] = fcount[rid]
         except Exception:
             pass
+        # doorway cells: air in the floor plan but a zone boundary in the zone map
+        self.door = np.zeros((self.N, self.N))
+        try:
+            fpl = md.get("floor_plan", None)
+            zm = md.get("zone_map", None)
+            if fpl is not None and zm is not None:
+                lab, n = _label_rooms(zm)
+                fpl = np.asarray(fpl)
+                zm = np.asarray(zm)
+                if lab is not None and n >= self.N and fpl.shape == zm.shape:
+                    zi = {int(v.split("_")[-1]): i for i, v in enumerate(self.zone_ids)}
+                    rows, cols = np.nonzero((fpl == 0) & (zm != 0))
+                    h, w = lab.shape
+                    for r, c in zip(rows.tolist(), cols.tolist()):
+                        adj = set()
+                        for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            rr, cc = r + dr, c + dc
+                            if 0 <= rr < h and 0 <= cc < w and lab[rr, cc] > 0:
+                                adj.add(int(lab[rr, cc]))
+                        adj = [zi[a] for a in adj if a in zi]
+                        for i in range(len(adj)):
+                            for j in range(i + 1, len(adj)):
+                                self.door[adj[i], adj[j]] += 1.0
+                                self.door[adj[j], adj[i]] += 1.0
+        except Exception:
+            self.door = np.zeros((self.N, self.N))
+        self.door_sum = self.door.sum(1)
         self.area = area
         self.faces = faces
         self.cdt = p["cdt_per_m2"] * area
@@ -256,6 +293,17 @@ class SBPolicy:
         self.day_cnt = 0
         self.last_net = None                  # mean of the above for the last occupied day (W)
         self.flushing = np.zeros(self.N, dtype=bool)
+        self.wm_last = None                   # last raw disturbance measurement
+        self.dwm = None                       # its latest one-step change
+        self.occ_hist = [0.0, 0.0, 0.0, 0.0]  # recent observed occupant counts, newest first
+        self.occ_max_today = 0.0
+        self.dep = np.zeros(self.N)           # departures attributed to each zone today
+        self.dirty = np.zeros(self.N, dtype=bool)
+        self.drift = np.zeros(self.N)
+        self.sig2 = np.full(self.N, 25.0)
+        self.released = np.zeros(self.N, dtype=bool)
+        self.rel_off = np.zeros(self.N)       # current band widening of released zones (K)
+        self.dy = np.zeros(self.N)            # last one-step change of the zone sensors
         self.day_mech = np.zeros(self.K)      # compressor electricity per air handler over the day
         self.last_mech = None
         self.was_window = False
@@ -332,6 +380,11 @@ class SBPolicy:
             w_meas = w_meas - (self.g_sched if self.p2["cnow"] else 0.0)
             al = p["w_alpha"]
             self.Wb = (1 - al) * self.Wb + al * w_meas
+            self.dwm = (w_meas - self.wm_last) if self.wm_last is not None else None
+            self.wm_last = w_meas
+        else:
+            self.dwm = None
+        self.dy = (y - self.y_prev) if self.y_prev is not None else np.zeros(N)
         theta = self.Wb / self.kss
         if self.theta_prev is not None:
             self._slow_update(theta, self.theta_prev, y, t_out)
@@ -358,6 +411,7 @@ class SBPolicy:
             dj = (dow + 1) % 7
         in_window = (dj < 5) and (self.h_start - 1e-6 <= hj < self.h_end - 1e-6)
 
+        self.occ_hist = [occ] + self.occ_hist[:3]
         if cnow and not self.prev_cnow:
             self.occ_seen_today = False
             self.comfort_steps_today = 0
@@ -397,6 +451,18 @@ class SBPolicy:
         lo_z = np.full(N, -BIG)
         hi_z = np.full(N, BIG)
         p_cap = self.sp_rng[1]
+        if cnow and in_window:
+            self.occ_max_today = max(self.occ_max_today, occ)
+            if p["rel_on"]:
+                self._track_departures(hour)
+        else:
+            self.dep[:] = 0.0
+            self.dirty[:] = False
+            self.released[:] = False
+            self.rel_off[:] = 0.0
+            self.drift[:] = 0.0
+            if not cnow:
+                self.occ_max_today = 0.0
         mode = "off"
         if in_window:
             self.start_heat[:] = False
@@ -405,6 +471,11 @@ class SBPolicy:
                 mode = "occ"
                 lo_z[:] = lo
                 hi_z[:] = hi
+                if p["rel_on"] and self.released.any():
+                    self.rel_off = np.where(
+                        self.released, np.minimum(self.rel_off + p["rel_ramp"], p["rel_delta"]), 0.0)
+                    lo_z = lo_z - self.rel_off
+                    hi_z = hi_z + self.rel_off
         elif steps_to_start is not None and steps_to_start <= p["max_lead_steps"]:
             mode = "pre"
             self._prestart(zt, theta, steps_to_start, lo, hi, t_out, fmax)
@@ -532,9 +603,55 @@ class SBPolicy:
                         ahu_set=ahu_set.copy(), ahu_p=ahu_p.copy(), ahu_r=ahu_r.copy(),
                         cs=cs_plan.copy(), W=W.copy(), theta=theta.copy(), dp=dp,
                         start=(self.start_heat | self.start_cool).astype(float),
+                        released=self.released.astype(float), dep=self.dep.copy(),
+                        dwm=(self.dwm.copy() if self.dwm is not None else np.zeros(N)),
+                        occ_obs=occ,
                         slow_a=self.slow[:, 0].copy(), holiday=self.holiday, day_done=self.day_done)
         self.step += 1
         return {"continuous_action": cont, "discrete_action": disc}
+
+    # ------------------------------------------------------ occupancy tracking
+    def _track_departures(self, hour):
+        """Attribute each observed departure to a zone via its heat signature.
+
+        After the arrival window closes nobody comes back, so a zone whose
+        occupants have all been seen leaving needs no conditioning.  A
+        departure removes `rel_heat_w` from the zone's disturbance one step
+        after the building-wide count drops.  Only unambiguous signatures are
+        counted, and a zone with any unexplained jump is never released.
+        """
+        p = self.p
+        if self.dwm is None or hour < p["rel_start_hour"] + 0.16:
+            return
+        lag = int(p["rel_lag"])
+        d = int(round(self.occ_hist[lag] - self.occ_hist[lag + 1]))
+        heat = p["rel_heat_w"]
+        tol = p["rel_tol"]
+        m_occ = max(1, int(round(self.occ_max_today / (0.9 * self.N))))
+        # heat exchanged with neighbours through doorways when their temperature moves
+        comp = p["rel_door_w"] * (self.door @ self.dy - self.door_sum * self.dy)
+        x = self.dwm - np.median(self.dwm) - self.drift - comp
+        active = ~self.released
+        cap = np.maximum(m_occ - self.dep, 0.0)
+        nz = np.clip(np.round(-x / heat), 0.0, cap)
+        match = (np.abs(x + heat * nz) <= tol) & active
+        cand = match & (nz >= 1)
+        units = int(nz[cand].sum())
+        chosen = np.zeros(self.N)
+        if d < 0 and 0 < units <= -d:
+            chosen = np.where(cand, nz, 0.0)
+            self.dep += chosen
+        elif units > 0:
+            # more signatures than departures: cannot tell which are real
+            self.dirty |= cand
+        resid = x + heat * chosen
+        bad = (np.abs(resid) > tol) & active
+        self.dirty |= bad
+        quiet = (chosen == 0) & ~bad & active
+        self.drift = np.where(quiet, self.drift + 0.3 * x, self.drift)
+        self.sig2 = np.where(quiet, 0.95 * self.sig2 + 0.05 * resid * resid, self.sig2)
+        self.released = (self.released | ((self.dep >= m_occ) & ~self.dirty
+                                          & (self.sig2 < p["rel_sig_max"] ** 2)))
 
     # ------------------------------------------------------------- slow model
     def _slow_update(self, theta, theta_prev, t_air, t_out):
