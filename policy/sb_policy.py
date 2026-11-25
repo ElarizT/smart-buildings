@@ -300,6 +300,7 @@ class SBPolicy:
         self.start_heat = np.zeros(self.N, dtype=bool)
         self.start_cool = np.zeros(self.N, dtype=bool)
         self.late = np.zeros(self.N, dtype=bool)
+        self.rel_block = False
         self.day_net = np.zeros(self.N)       # net HVAC heat into each zone over the occupied day (W-steps)
         self.day_cnt = 0
         self.last_net = None                  # mean of the above for the last occupied day (W)
@@ -656,6 +657,13 @@ class SBPolicy:
             return
         lag = int(p["rel_lag"])
         d = int(round(self.occ_hist[lag] - self.occ_hist[lag + 1]))
+        if d > 0 or self.rel_block:
+            # somebody arrived after the arrival window: the occupancy model is not the one
+            # assumed here, so stop releasing zones for the rest of the episode
+            self.rel_block = True
+            self.released[:] = False
+            self.rel_off[:] = 0.0
+            return
         heat = p["rel_heat_w"]
         tol = p["rel_tol"]
         m_occ = max(1, int(round(self.occ_max_today / (0.9 * self.N))))
