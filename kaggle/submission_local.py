@@ -50,8 +50,8 @@ BIG = 1.0e9
 
 DEFAULT_PARAMS = dict(
     # comfort margins inside the band (K)
-    m_heat=0.10,
-    m_cool=0.10,
+    m_heat=0.05,
+    m_cool=0.05,
     # zone model
     cdt_per_m2=12.0,           # air heat capacity / step, W/K per m2
     g_per_m2=4.8,              # air <-> mass conductance, W/K per m2
@@ -67,8 +67,9 @@ DEFAULT_PARAMS = dict(
     # optimal start
     max_lead_steps=144,
     p_pre=400.0,               # static pressure cap while pre-conditioning
-    pre_margin=0.3,            # K of safety on the predicted start temperature
-    pre_extra_steps=1,         # start this many steps earlier than predicted
+    pre_margin=0.1,            # K of safety on the predicted start temperature
+    pre_extra_steps=0,         # start this many steps earlier than predicted
+    pre_force_steps=2,         # within this many steps of occupancy, start every zone that needs it
     # night flush (free cooling with outside air while unoccupied)
     flush_on=0,
     flush_window_steps=120,    # only in the last hours before occupancy
@@ -93,7 +94,8 @@ DEFAULT_PARAMS = dict(
     rel_lag=1,                 # count change that matches the current disturbance innovation
     rel_start_hour=13.0,
     # holiday / end-of-day detection
-    holiday_steps=4,
+    holiday_steps=3,           # minimum steps of an empty comfort period before assuming a holiday
+    holiday_exp=7.0,           # wait until exp(-holiday_exp) is the chance of a normal day looking empty
     # hot water
     tw_set=350.0,
     dp_min=0.3,
@@ -306,6 +308,7 @@ class SBPolicy:
         self.day_cnt = 0
         self.last_net = None                  # mean of the above for the last occupied day (W)
         self.flushing = np.zeros(self.N, dtype=bool)
+        self.m_occ_est = 1                    # occupants per zone, learnt from the daily peak count
         self.wm_last = None                   # last raw disturbance measurement
         self.dwm = None                       # its latest one-step change
         self.occ_hist = [0.0, 0.0, 0.0, 0.0]  # recent observed occupant counts, newest first
@@ -434,7 +437,11 @@ class SBPolicy:
             self.comfort_steps_today += 1
             if occ > 0:
                 self.occ_seen_today = True
-            if (not self.occ_seen_today) and self.comfort_steps_today > p["holiday_steps"]:
+            # wait long enough that an ordinary late first arrival is unlikely:
+            # P(nobody yet after k steps) = exp(-occupants * k / 36)
+            n_occ = max(self.m_occ_est, 1) * N
+            k_hol = min(max(int(math.ceil(p["holiday_exp"] * 36.0 / n_occ)), int(p["holiday_steps"])), 14)
+            if (not self.occ_seen_today) and self.comfort_steps_today > k_hol:
                 self.holiday = True
             if self.occ_seen_today:
                 self.holiday = False
@@ -605,6 +612,8 @@ class SBPolicy:
             self.day_net += qn + cs_plan * (tsn - zt)
             self.day_cnt += 1
         if self.was_window and not in_window:
+            if self.occ_max_today > 0:
+                self.m_occ_est = max(1, int(round(self.occ_max_today / (0.9 * N))))
             if self.day_cnt > 24:
                 self.last_net = self.day_net / self.day_cnt
                 self.last_mech = self.day_mech / self.day_cnt
@@ -716,6 +725,11 @@ class SBPolicy:
         want_h = todo_h & (ta_o < lo)
         want_c = todo_c & (ta_o > hi)
         if not (want_h.any() or want_c.any()):
+            return
+        if n <= p["pre_force_steps"]:
+            # close to occupancy: start everything that would otherwise begin the day out of band
+            self.start_heat |= want_h
+            self.start_cool |= want_c
             return
         nb = max(n - p["pre_extra_steps"], 0)
         ta1, th1 = off_step(zt.copy(), theta.copy())
