@@ -74,6 +74,9 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
         except Exception as e:  # pragma: no cover
             print("mass idx failed", e, file=sys.stderr)
             mass_idx = None
+    rel_stats = dict(true=0, false=0, false_wt=0.0, empty=0)
+    rel_prev = None
+    pol_zone_ids = list(getattr(policy, "zone_ids", vav_ids))
     tot = dict(reward=0.0, comfort=0.0, cost=0.0, carbon=0.0)
     e_tot = dict(fan=0.0, cool=0.0, pump=0.0, gas=0.0)
     rows = []
@@ -101,6 +104,17 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
             pump += v.pump_electrical_energy_rate
             gas += v.natural_gas_heating_energy_rate
         e_tot["fan"] += fan; e_tot["cool"] += cool; e_tot["pump"] += pump; e_tot["gas"] += gas
+        # release accounting: flags used for the action just applied vs true occupancy now
+        dbg_ = getattr(policy, "dbg", None)
+        rel_prev = (np.asarray(dbg_["released"]) > 0) if (dbg_ and "released" in dbg_) else None
+        if rel_prev is not None:
+            zo = np.array([info.zone_reward_infos[v.replace("VAV_", "room_")].average_occupancy
+                           for v in pol_zone_ids])
+            if zo.sum() > 0:
+                rel_stats["true"] += int((rel_prev & (zo <= 0)).sum())
+                rel_stats["false"] += int((rel_prev & (zo > 0)).sum())
+                rel_stats["false_wt"] += float((rel_prev & (zo > 0)).sum() / zo.sum())
+                rel_stats["empty"] += int((zo <= 0).sum())
         if trace is not None:
             zobs = np.array([vavs[v].zone_air_temperature for v in vav_ids])
             _avg = sim.building.get_zone_average_temps()
@@ -141,7 +155,7 @@ def run(scenario: Path, policy_spec: str, steps: int = 8640, trace: str | None =
         comfort_part=-0.6 * tot["comfort"] / n, cost_part=0.2 * tot["cost"] / n,
         carbon_part=0.2 * tot["carbon"] / n,
         mean_kw={k: v / n / 1000.0 for k, v in e_tot.items()},
-        wall_s=wall, policy_s=t_pol, policy_init_s=t_init, n_ahu=len(ahus), n_zone=len(vav_ids),
+        release=rel_stats, wall_s=wall, policy_s=t_pol, policy_init_s=t_init, n_ahu=len(ahus), n_zone=len(vav_ids),
     )
     if trace is not None:
         keys = [k for k in rows[-1].keys() if all(k in row for row in rows[1:])]

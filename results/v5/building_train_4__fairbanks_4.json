@@ -1,0 +1,30 @@
+{
+ "scenario": "building_train_4/fairbanks_4",
+ "policy": "sb_policy_v5:SBPolicy",
+ "total_steps": 8640,
+ "total_reward": -9.782817216881085,
+ "score": 0.0011322705112130885,
+ "comfort_sum": 0.0,
+ "cost_sum": 23.062094934401102,
+ "carbon_sum": 25.851991077768616,
+ "comfort_part": -0.0,
+ "cost_part": 0.0005338447901481737,
+ "carbon_part": 0.0005984257193927921,
+ "mean_kw": {
+  "fan": 0.9522985023498535,
+  "cool": 0.24312746562273416,
+  "pump": 0.002344177273173229,
+  "gas": 3.7685894344789013
+ },
+ "release": {
+  "true": 33353,
+  "false": 0,
+  "false_wt": 0.0,
+  "empty": 82741
+ },
+ "wall_s": 649.0679287910461,
+ "policy_s": 11.021583080291748,
+ "policy_init_s": 0.006696462631225586,
+ "n_ahu": 6,
+ "n_zone": 54
+}

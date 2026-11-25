@@ -1,0 +1,30 @@
+{
+ "scenario": "building_train_2/phoenix_6",
+ "policy": "sb_policy_v5:SBPolicy",
+ "total_steps": 8640,
+ "total_reward": -59.21550978935397,
+ "score": 0.006853646966360413,
+ "comfort_sum": 0.0,
+ "cost_sum": 240.53065634777633,
+ "carbon_sum": 55.54689287939485,
+ "comfort_part": -0.0,
+ "cost_part": 0.005567839267309638,
+ "carbon_part": 0.0012858077055415476,
+ "mean_kw": {
+  "fan": 1.5687742715764927,
+  "cool": 25.019190615675182,
+  "pump": 0.0,
+  "gas": 0.0072466848758618455
+ },
+ "release": {
+  "true": 36589,
+  "false": 0,
+  "false_wt": 0.0,
+  "empty": 83738
+ },
+ "wall_s": 901.1526861190796,
+ "policy_s": 13.354934692382812,
+ "policy_init_s": 0.006429910659790039,
+ "n_ahu": 9,
+ "n_zone": 85
+}
